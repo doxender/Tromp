@@ -107,6 +107,31 @@ interface WaypointDao {
 }
 
 @Dao
+interface KnownLocationDao {
+    @Insert
+    suspend fun insert(entry: KnownLocationEntity): Long
+
+    /**
+     * All rows whose lat/lon fall within the given bounding box. Callers
+     * compute exact Haversine distance to pick the nearest match.
+     */
+    @Query(
+        """
+        SELECT * FROM known_location
+        WHERE lat BETWEEN :minLat AND :maxLat
+          AND lon BETWEEN :minLon AND :maxLon
+        """
+    )
+    suspend fun withinBox(
+        minLat: Double, maxLat: Double,
+        minLon: Double, maxLon: Double,
+    ): List<KnownLocationEntity>
+
+    @Query("SELECT COUNT(*) FROM known_location")
+    suspend fun count(): Int
+}
+
+@Dao
 interface OfflineRegionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(region: OfflineRegionEntity)
