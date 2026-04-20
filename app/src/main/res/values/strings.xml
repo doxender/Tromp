@@ -17,9 +17,14 @@
     <string name="benchmark_active">Benchmark: %1$.1f m from %2$s</string>
 
     <string name="stale_benchmark_title">Stale benchmark</string>
-    <string name="stale_benchmark_body">Your benchmark is more than 4 hours old. Weather pressure may have changed, so altitude readings may be off. Re-benchmark?</string>
-    <string name="stale_benchmark_yes">Yes</string>
-    <string name="stale_benchmark_no">No</string>
+    <string name="no_benchmark_title">No benchmark</string>
+    <string name="no_benchmark_body">No benchmark has been acquired. Altitude readings will use raw GPS, which is less accurate. Acquire a benchmark first?</string>
+    <string name="stale_nearby_body">Your benchmark is more than 1 hour old, but you are still within 100 ft of where it was taken. You can refresh just the barometer calibration (faster), or do a full re-benchmark.</string>
+    <string name="stale_full_body">Your benchmark is stale (more than 1 hour old or more than 100 ft from this location). Altitude readings may be off. Re-benchmark?</string>
+    <string name="dialog_benchmark_now">Benchmark now</string>
+    <string name="dialog_recalibrate_baro">Refresh barometer</string>
+    <string name="dialog_rebenchmark_full">Full re-benchmark</string>
+    <string name="dialog_skip">Skip</string>
 
     <string name="calibration_title">Calibrate Barometer</string>
     <string name="calibration_cancel">Cancel</string>

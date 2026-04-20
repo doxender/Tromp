@@ -224,6 +224,7 @@ class BenchmarkActivity : AppCompatActivity() {
             baroSampleCount = pressures.size,
             acquiredAtMs = System.currentTimeMillis(),
         )
+        BenchmarkSession.save(this)
         setResult(RESULT_OK)
         startActivity(Intent(this, CalibrationActivity::class.java))
         finish()

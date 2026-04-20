@@ -17,15 +17,18 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.trektracker.R
 import com.trektracker.databinding.ActivityMainBinding
+import com.trektracker.location.LocationSource
 import com.trektracker.service.TrackingService
 import com.trektracker.service.TrackingNotifier
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.ui.benchmark.BenchmarkActivity
+import com.trektracker.ui.calibration.CalibrationActivity
 import com.trektracker.ui.history.HistoryActivity
 import com.trektracker.ui.summary.SummaryActivity
 import com.trektracker.util.formatDuration
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 
 /**
  * Idle landing screen and live-tracking toggle. START launches TrackingService;
@@ -47,6 +50,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.txtVersion.text = "v${versionName()}"
+
+        BenchmarkSession.load(this)
 
         binding.btnStart.setOnClickListener {
             if (isTracking) onStopClicked() else onStartClicked()
@@ -119,23 +124,51 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        if (BenchmarkSession.isStale()) {
-            showStaleBenchmarkDialog()
-            return
+        // Best-effort current location for the proximity check, then route.
+        lifecycleScope.launch {
+            val loc = LocationSource(this@MainActivity).lastKnown()
+            when (BenchmarkSession.check(loc?.latitude, loc?.longitude)) {
+                BenchmarkSession.Freshness.Fresh -> startTrackingService()
+                BenchmarkSession.Freshness.NoBenchmark -> showNoBenchmarkDialog()
+                BenchmarkSession.Freshness.StaleNearby -> showStaleNearbyDialog()
+                BenchmarkSession.Freshness.StaleNeedsFull -> showStaleFullDialog()
+            }
         }
-        startTrackingService()
     }
 
-    private fun showStaleBenchmarkDialog() {
+    private fun showNoBenchmarkDialog() {
         AlertDialog.Builder(this)
-            .setTitle(R.string.stale_benchmark_title)
-            .setMessage(R.string.stale_benchmark_body)
-            .setPositiveButton(R.string.stale_benchmark_yes) { _, _ ->
+            .setTitle(R.string.no_benchmark_title)
+            .setMessage(R.string.no_benchmark_body)
+            .setPositiveButton(R.string.dialog_benchmark_now) { _, _ ->
                 benchmarkLauncher.launch(Intent(this, BenchmarkActivity::class.java))
             }
-            .setNegativeButton(R.string.stale_benchmark_no) { _, _ ->
-                startTrackingService()
+            .setNegativeButton(R.string.dialog_skip) { _, _ -> startTrackingService() }
+            .show()
+    }
+
+    private fun showStaleNearbyDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.stale_benchmark_title)
+            .setMessage(R.string.stale_nearby_body)
+            .setPositiveButton(R.string.dialog_recalibrate_baro) { _, _ ->
+                startActivity(Intent(this, CalibrationActivity::class.java))
             }
+            .setNeutralButton(R.string.dialog_rebenchmark_full) { _, _ ->
+                benchmarkLauncher.launch(Intent(this, BenchmarkActivity::class.java))
+            }
+            .setNegativeButton(R.string.dialog_skip) { _, _ -> startTrackingService() }
+            .show()
+    }
+
+    private fun showStaleFullDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.stale_benchmark_title)
+            .setMessage(R.string.stale_full_body)
+            .setPositiveButton(R.string.dialog_rebenchmark_full) { _, _ ->
+                benchmarkLauncher.launch(Intent(this, BenchmarkActivity::class.java))
+            }
+            .setNegativeButton(R.string.dialog_skip) { _, _ -> startTrackingService() }
             .show()
     }
 

@@ -16,6 +16,8 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
  * Wraps FusedLocationProviderClient as a cold Flow. Callers must hold
@@ -39,5 +41,17 @@ class LocationSource(context: Context) {
         }
         client.requestLocationUpdates(request, callback, Looper.getMainLooper())
         awaitClose { client.removeLocationUpdates(callback) }
+    }
+
+    /**
+     * One-shot best-effort last-known location. Returns whatever Fused has
+     * cached (often already available, no sensor wake needed); null if no fix
+     * has been obtained yet or the API call fails.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun lastKnown(): Location? = suspendCancellableCoroutine { cont ->
+        client.lastLocation
+            .addOnSuccessListener { if (cont.isActive) cont.resume(it) }
+            .addOnFailureListener { if (cont.isActive) cont.resume(null) }
     }
 }
