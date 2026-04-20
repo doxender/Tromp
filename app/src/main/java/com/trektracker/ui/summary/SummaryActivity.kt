@@ -13,6 +13,7 @@ import com.trektracker.ui.map.MapActivity
 import com.trektracker.util.formatDuration
 import com.trektracker.util.metersToFeet
 import com.trektracker.util.metersToMiles
+import com.trektracker.util.mpsToKmh
 import com.trektracker.util.mpsToMph
 
 /**
@@ -38,7 +39,9 @@ class SummaryActivity : AppCompatActivity() {
             val distMi = snap.totalDistanceM.metersToMiles()
             val ascentFt = snap.totalAscentM.metersToFeet()
             val descentFt = snap.totalDescentM.metersToFeet()
+            val avgKmh = snap.avgSpeedMps.mpsToKmh()
             val avgMph = snap.avgSpeedMps.mpsToMph()
+            val maxKmh = snap.maxSpeedMps.mpsToKmh()
             val maxMph = snap.maxSpeedMps.mpsToMph()
 
             binding.txtTotals.text = buildString {
@@ -46,8 +49,8 @@ class SummaryActivity : AppCompatActivity() {
                 appendLine("Distance:  %.2f mi (%.2f km)".format(distMi, snap.totalDistanceM / 1000.0))
                 appendLine("Ascent:    %.0f ft (%.0f m)".format(ascentFt, snap.totalAscentM))
                 appendLine("Descent:   %.0f ft (%.0f m)".format(descentFt, snap.totalDescentM))
-                appendLine("Avg speed: %.1f mph (%.2f m/s)".format(avgMph, snap.avgSpeedMps))
-                appendLine("Max speed: %.1f mph (%.2f m/s)".format(maxMph, snap.maxSpeedMps))
+                appendLine("Avg speed: %.1f km/h · %.2f m/s · %.1f mph".format(avgKmh, snap.avgSpeedMps, avgMph))
+                appendLine("Max speed: %.1f km/h · %.2f m/s · %.1f mph".format(maxKmh, snap.maxSpeedMps, maxMph))
                 appendLine("Points:    ${points.size}")
             }
             binding.btnMap.isEnabled = points.size >= 2

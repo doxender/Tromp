@@ -2,6 +2,13 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4] — Unreleased
+
+Work on branch `SummarySpeedUnits`.
+
+### Changed
+- Summary screen now shows avg and max speed in three units side-by-side: km/h, m/s, and mph.
+
 ## [1.3] — Unreleased
 
 Work on branch `StalenessRules`.
