@@ -1,5 +1,7 @@
 # TrekTracker
 
+**Version 1.0** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
 Includes a benchmarking function so live altitude can be read from the barometer instead of GPS.
