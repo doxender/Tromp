@@ -51,6 +51,11 @@ class SummaryActivity : AppCompatActivity() {
                 appendLine("Descent:   %.0f ft (%.0f m)".format(descentFt, snap.totalDescentM))
                 appendLine("Avg speed: %.1f km/h · %.2f m/s · %.1f mph".format(avgKmh, snap.avgSpeedMps, avgMph))
                 appendLine("Max speed: %.1f km/h · %.2f m/s · %.1f mph".format(maxKmh, snap.maxSpeedMps, maxMph))
+                if (snap.stepCount > 0 && snap.totalDistanceM > 0) {
+                    val strideM = snap.totalDistanceM / snap.stepCount
+                    appendLine("Steps:     ${snap.stepCount}")
+                    appendLine("Stride:    %.2f ft (%.2f m)".format(strideM.metersToFeet(), strideM))
+                }
                 appendLine("Points:    ${points.size}")
             }
             binding.btnMap.isEnabled = points.size >= 2

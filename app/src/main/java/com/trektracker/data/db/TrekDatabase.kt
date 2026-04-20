@@ -7,6 +7,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -15,8 +17,8 @@ import androidx.room.RoomDatabase
         WaypointEntity::class,
         OfflineRegionEntity::class,
     ],
-    version = 1,
-    exportSchema = false,
+    version = 2,
+    exportSchema = true,
 )
 abstract class TrekDatabase : RoomDatabase() {
     abstract fun activities(): ActivityDao
@@ -28,13 +30,25 @@ abstract class TrekDatabase : RoomDatabase() {
         @Volatile
         private var instance: TrekDatabase? = null
 
+        /** v1 → v2: adds stepCount column to `activity` (default 0). */
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE activity ADD COLUMN stepCount INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun get(context: Context): TrekDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     TrekDatabase::class.java,
                     "trektracker.db",
-                ).build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { instance = it }
             }
     }
 }

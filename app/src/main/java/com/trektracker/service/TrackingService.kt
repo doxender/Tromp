@@ -14,6 +14,7 @@ import com.trektracker.data.db.TrackPointEntity
 import com.trektracker.data.db.TrekDatabase
 import com.trektracker.location.LocationSource
 import com.trektracker.sensors.BarometerSource
+import com.trektracker.sensors.StepCounterSource
 import com.trektracker.tracking.AscentAccumulator
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.tracking.TrackSnapshot
@@ -58,6 +59,7 @@ class TrackingService : Service() {
     private var tickerJob: Job? = null
     private var locationJob: Job? = null
     private var barometerJob: Job? = null
+    private var stepCounterJob: Job? = null
     private val ascent = AscentAccumulator()
 
     private var startElapsedMs: Long = 0L
@@ -68,6 +70,12 @@ class TrackingService : Service() {
     @Volatile
     private var lastPressureHpa: Double? = null
     private var sessionQnhHpa: Double? = null
+
+    @Volatile
+    private var stepBaseline: Float? = null
+
+    @Volatile
+    private var sessionStepCount: Int = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -98,6 +106,8 @@ class TrackingService : Service() {
         maxSpeedMps = 0.0
         lastPressureHpa = null
         sessionQnhHpa = BenchmarkSession.qnhHpa
+        stepBaseline = null
+        sessionStepCount = 0
         startElapsedMs = android.os.SystemClock.elapsedRealtime()
 
         val initial = TrackSnapshot.empty(activityId, type).copy(
@@ -137,6 +147,17 @@ class TrackingService : Service() {
         barometerJob = if (sessionQnhHpa != null && baro.isAvailable) {
             baro.readings()
                 .onEach { lastPressureHpa = it.toDouble() }
+                .launchIn(scope)
+        } else null
+
+        stepCounterJob?.cancel()
+        val stepCounter = StepCounterSource(this)
+        stepCounterJob = if (stepCounter.isAvailable) {
+            stepCounter.readings()
+                .onEach { raw ->
+                    val base = stepBaseline ?: raw.also { stepBaseline = it }
+                    sessionStepCount = (raw - base).toInt().coerceAtLeast(0)
+                }
                 .launchIn(scope)
         } else null
     }
@@ -191,6 +212,7 @@ class TrackingService : Service() {
             maxSpeedMps = maxSpeedMps,
             elapsedMs = elapsed,
             pressureHpa = pressure,
+            stepCount = sessionStepCount,
         )
         _snapshots.value = next
         TrackingSession.lastSnapshot = next
@@ -248,6 +270,8 @@ class TrackingService : Service() {
         locationJob = null
         barometerJob?.cancel()
         barometerJob = null
+        stepCounterJob?.cancel()
+        stepCounterJob = null
         val finalSnap = _snapshots.value
         TrackingSession.lastSnapshot = finalSnap
         _snapshots.value = null
@@ -274,6 +298,7 @@ class TrackingService : Service() {
             minGradePct = if (snap.minGradePct == Double.POSITIVE_INFINITY) 0.0 else snap.minGradePct,
             benchmarkElevM = benchmark?.elevM,
             qnhHpa = snap.qnhHpa,
+            stepCount = snap.stepCount,
         )
         val pointRows = points.mapIndexed { index, p ->
             TrackPointEntity(
@@ -299,6 +324,7 @@ class TrackingService : Service() {
         tickerJob?.cancel()
         locationJob?.cancel()
         barometerJob?.cancel()
+        stepCounterJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }

@@ -124,6 +124,14 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasActivityRecognition()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
+                REQ_ACTIVITY_RECOGNITION,
+            )
+            return
+        }
         // Best-effort current location for the proximity check, then route.
         lifecycleScope.launch {
             val loc = LocationSource(this@MainActivity).lastKnown()
@@ -197,6 +205,11 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
 
+    private fun hasActivityRecognition(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
+                PackageManager.PERMISSION_GRANTED
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -207,11 +220,15 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             REQ_FINE_LOCATION -> if (granted) onStartClicked()
             REQ_NOTIFICATIONS -> if (granted) onStartClicked()
+            // Activity recognition is optional: if the user denies, tracking still
+            // proceeds; the summary just won't include a stride figure.
+            REQ_ACTIVITY_RECOGNITION -> onStartClicked()
         }
     }
 
     companion object {
         private const val REQ_FINE_LOCATION = 100
         private const val REQ_NOTIFICATIONS = 101
+        private const val REQ_ACTIVITY_RECOGNITION = 102
     }
 }

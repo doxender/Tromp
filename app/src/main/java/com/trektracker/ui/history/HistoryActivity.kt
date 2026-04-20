@@ -112,6 +112,7 @@ class HistoryActivity : AppCompatActivity() {
                 movingMs = activity.movingMs,
                 pressureHpa = null,
                 qnhHpa = activity.qnhHpa,
+                stepCount = activity.stepCount,
             )
             points.forEach {
                 TrackingSession.append(
