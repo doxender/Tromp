@@ -16,8 +16,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrackPointEntity::class,
         WaypointEntity::class,
         OfflineRegionEntity::class,
+        KnownLocationEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class TrekDatabase : RoomDatabase() {
@@ -25,6 +26,7 @@ abstract class TrekDatabase : RoomDatabase() {
     abstract fun trackPoints(): TrackPointDao
     abstract fun waypoints(): WaypointDao
     abstract fun offlineRegions(): OfflineRegionDao
+    abstract fun knownLocations(): KnownLocationDao
 
     companion object {
         @Volatile
@@ -39,6 +41,28 @@ abstract class TrekDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3: adds the `known_location` cache table. */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS known_location (
+                        id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        lat         REAL NOT NULL,
+                        lon         REAL NOT NULL,
+                        elevM       REAL NOT NULL,
+                        source      TEXT NOT NULL,
+                        recordedAt  INTEGER NOT NULL,
+                        horizAccM   REAL,
+                        fixCount    INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_known_location_lat ON known_location(lat)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_known_location_lon ON known_location(lon)")
+            }
+        }
+
         fun get(context: Context): TrekDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -46,7 +70,7 @@ abstract class TrekDatabase : RoomDatabase() {
                     TrekDatabase::class.java,
                     "trektracker.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }

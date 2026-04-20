@@ -74,3 +74,23 @@ data class OfflineRegionEntity(
     val tileBytesTotal: Long,
     val downloadedAt: Long,
 )
+
+/**
+ * Cached orthometric elevation at a known location. Populated every time a
+ * benchmark successfully resolves a DEM elevation, so subsequent benchmarks
+ * within 50 m can skip the 60 s averaging + network round trip.
+ */
+@Entity(
+    tableName = "known_location",
+    indices = [Index("lat"), Index("lon")],
+)
+data class KnownLocationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val lat: Double,
+    val lon: Double,
+    val elevM: Double,
+    val source: String,
+    val recordedAt: Long,
+    val horizAccM: Double?,
+    val fixCount: Int?,
+)

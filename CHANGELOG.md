@@ -2,6 +2,16 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6] — Unreleased
+
+Work on branch `BenchmarkFix`.
+
+### Added
+- **Known-location elevation cache** (new `known_location` Room table, v3 schema). Every successful benchmark records its lat/lon/elevation/source. On subsequent benchmarks, the first GPS fix is compared against the cache: if the user is within 50 m of a previously benchmarked spot, we short-circuit the 60 s averaging + DEM lookup and offer the cached elevation, with a choice to accept or run the full flow anyway.
+
+### Changed
+- `DemClient.queryUsgs3dep` and `queryOpenElevation` now retry once on failure (~750 ms backoff) and log the reason (`Log.w`) when both attempts fail. The USGS EPQS endpoint is known to return transient 5xx / timeouts; a single retry typically turns a miss into a hit.
+
 ## [1.5] — Unreleased
 
 Work on branch `StrideLength`.
