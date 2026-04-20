@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        binding.txtVersion.text = "v${versionName()}"
+
         binding.btnStart.setOnClickListener {
             if (isTracking) onStopClicked() else onStartClicked()
         }
@@ -86,6 +88,10 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (!isTracking) refreshIdleUi()
     }
+
+    private fun versionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (_: Exception) { "?" }
 
     private fun refreshIdleUi() {
         val b = BenchmarkSession.current
