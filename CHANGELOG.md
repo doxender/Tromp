@@ -2,6 +2,14 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3] — Unreleased
+
+Work on branch `StalenessRules`.
+
+### Changed
+- **Benchmark staleness rules** (DESIGN.md Decision Log row 5). A benchmark is now considered stale if any of: it does not exist, it was taken more than **100 ft** from the current location, or it is more than **1 h** old. On START the app checks against the last-known GPS fix and routes to one of three dialogs: no-benchmark (offer full), stale-but-nearby (offer fast barometer-only refresh or full), or stale-far (offer full). A barometer-only refresh keeps the stored benchmark elevation and just re-runs calibration.
+- **Benchmark persistence**: the benchmark record (lat/lon/elev/source/acquiredAt) is now saved to `SharedPreferences` on Accept and restored on app launch, so the proximity check still works after the OS kills the process. QNH is not persisted — weather drift makes it stale within hours.
+
 ## [1.2] — Unreleased
 
 Work on branch `AddVersion`.
