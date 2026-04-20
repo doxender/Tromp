@@ -2,6 +2,13 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2] — Unreleased
+
+Work on branch `AddVersion`.
+
+### Added
+- Version label shown under the title on the main screen, pulled at runtime from `PackageManager` so it always matches the built APK.
+
 ## [1.1] — Unreleased
 
 Work in progress on branch `AltitudeAccuracy` — improvements to altitude precision.
