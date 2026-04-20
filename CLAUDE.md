@@ -8,8 +8,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `DESIGN.md` at the repo root is the authoritative design document for this app: requirements, assumed defaults (including the locked color palette), user flows, architecture, Room schema, the key algorithms (grade, ascent hysteresis, auto-pause, QNH), dependencies, and the Decision Log of resolved open questions. Read it before making non-trivial changes — architecture decisions that look arbitrary in the code are usually justified there.
 
-The sibling project at `../BenchmarkElevation` shipped the GPS-averaging benchmark + barometer calibration flows that this app re-implements from scratch. There is **no code dependency** between the two apps; they evolve independently. Don't add one.
-
 ## Build & run
 
 Single-module Gradle (Kotlin DSL) Android app. Requires `local.properties` with `sdk.dir=...` for CLI builds.
@@ -18,7 +16,7 @@ Single-module Gradle (Kotlin DSL) Android app. Requires `local.properties` with 
 - Assemble: `./gradlew :app:assembleDebug`
 - Unit tests (pure-logic classes — see §10 of DESIGN.md): `./gradlew :app:testDebugUnitTest`
 - Clean: `./gradlew clean`
-- Primary workflow is Android Studio (File → Open → this folder → Gradle sync). The Gradle wrapper script (`gradlew`) is not checked in — matches the BenchmarkElevation convention.
+- Primary workflow is Android Studio (File → Open → this folder → Gradle sync). The Gradle wrapper script (`gradlew`) is not checked in.
 
 Toolchain: AGP 8.13.2, Kotlin 1.9.24, JVM target 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. ViewBinding enabled (generated `ActivityMainBinding` lives in `com.trektracker.databinding`). kapt is enabled for Room's annotation processor.
 
@@ -75,4 +73,4 @@ Crash recovery: service writes an active-session-id to SharedPreferences on star
 
 ## Design decisions already resolved
 
-See DESIGN.md §11 Decision Log. In short: name "TrekTracker"; outdoor earth-tones dark palette; single 3 m ascent hysteresis; generic activity model with a type-label dropdown; full stats scope (date-range + per-type + YoY + PRs + distance/week bar chart); default name `"{type} · YYYY-MM-DD HH:MM"`; BenchmarkElevation code reused conceptually but reimplemented here. If the user asks to revisit any of these, update the Decision Log table in DESIGN.md so the doc doesn't drift from reality.
+See DESIGN.md §11 Decision Log. In short: name "TrekTracker"; outdoor earth-tones dark palette; single 3 m ascent hysteresis; generic activity model with a type-label dropdown; full stats scope (date-range + per-type + YoY + PRs + distance/week bar chart); default name `"{type} · YYYY-MM-DD HH:MM"`. If the user asks to revisit any of these, update the Decision Log table in DESIGN.md so the doc doesn't drift from reality.

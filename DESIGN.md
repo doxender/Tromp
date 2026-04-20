@@ -4,7 +4,7 @@
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap with offline tile support; falls back to a 2D elevation-colored ribbon view when no map tiles are available. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
-Includes a GPS-averaging benchmark acquisition flow and barometer calibration flow, modeled on the sibling `BenchmarkElevation` app but implemented fresh in this project. No code dependency on BenchmarkElevation — the two apps evolve independently.
+Includes a GPS-averaging benchmark acquisition flow and barometer calibration flow that establish a base elevation so live altitude during tracking can be read from the barometer instead of GPS.
 
 ---
 
@@ -12,8 +12,8 @@ Includes a GPS-averaging benchmark acquisition flow and barometer calibration fl
 
 ### 1.1 Functional — Live Tracking
 - Start / pause / resume / stop an activity session.
-- Optional pre-session **Acquire Benchmark** (reused from BenchmarkElevation): 60 s GPS average + USGS 3DEP / Open-Elevation lookup, producing a high-confidence starting elevation.
-- Optional **Calibrate Barometer** (reused): compute QNH from the benchmark elevation + averaged barometer reading; calibration persists for the current session only.
+- Optional pre-session **Acquire Benchmark**: 60 s GPS average + USGS 3DEP / Open-Elevation lookup, producing a high-confidence starting elevation.
+- Optional **Calibrate Barometer**: compute QNH from the benchmark elevation + averaged barometer reading; calibration persists for the current session only.
 - During tracking, continuously display and update:
   - Current latitude / longitude
   - Current elevation (barometer-driven if calibrated; GPS altitude otherwise)
@@ -62,8 +62,8 @@ Includes a GPS-averaging benchmark acquisition flow and barometer calibration fl
 - Network is required only for: DEM lookups during Acquire Benchmark, online OSM tiles (when no offline cache), map tile downloads.
 
 ### 1.6 Constraints
-- Target: Android 8.0+ (minSdk 26), compileSdk/targetSdk 34 — matches BenchmarkElevation.
-- Kotlin only; same toolchain as BenchmarkElevation (AGP 8.13.2, Kotlin 1.9.24, JVM 17).
+- Target: Android 8.0+ (minSdk 26), compileSdk/targetSdk 34.
+- Kotlin only; toolchain AGP 8.13.2, Kotlin 1.9.24, JVM 17.
 - Permissions required: `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS` (Android 13+), `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` (Android 14+).
 - OSM tile usage: default `tile.openstreetmap.org` is acceptable for personal use with a proper `User-Agent`; swap to Mapbox/MapTiler later if the user base grows (one-line change in osmdroid tile source).
 
@@ -94,7 +94,7 @@ These are locked-in defaults unless pushed back on. Configurable via Settings wh
 | Activity type model | one generic model, labeled via dropdown | — | Simpler than per-type subclasses; revisit in v2. |
 | Acquire Benchmark | **optional** before start | — | Too heavy to mandate; prompted as recommended. |
 | Calibrate Barometer | per-session only | — | Weather drift stales it anyway. |
-| Theme | outdoor earth-tones dark — forest green primary, warm amber accents, dark slate background (see §2.1) | — | Low-glare in daylight; visually distinct from BenchmarkElevation. |
+| Theme | outdoor earth-tones dark — forest green primary, warm amber accents, dark slate background (see §2.1) | — | Low-glare in daylight. |
 | Storage units | SI (m, s, m/s) internally; converted at display | — | Simplest correct approach. |
 | Crash recovery | dialog on launch: "Resume activity from HH:MM?" | — | Explicit over silent. |
 | Default activity naming | `"{type} · YYYY-MM-DD HH:MM"` (e.g. `"Hike · 2026-04-19 14:32"`) | editable post-save | Sortable, terse. |
@@ -202,7 +202,7 @@ app/
     GradeCalculator     rolling-window grade math
     AscentAccumulator   hysteresis-based climb/descent totals
     AutoPauseDetector   state machine
-    QnhCalibrator       ported from BenchmarkElevation
+    QnhCalibrator       QNH inversion of the barometric formula
   location/
     LocationSource      wraps FusedLocationProviderClient
   sensors/
@@ -347,7 +347,7 @@ Haversine between successive accepted fixes, with the accuracy filter rejecting 
 
 ---
 
-## 7. Dependencies (additions beyond BenchmarkElevation)
+## 7. Dependencies
 
 | Library | Purpose |
 |---|---|
@@ -406,6 +406,5 @@ All initial open questions resolved 2026-04-19.
 | 4 | Activity type in v1 | Single generic model with a type-label dropdown (Hike / Run / Bike / Walk / Other); all types tracked identically |
 | 5 | Stats scope in v1 | Full: date-range tiles + per-type breakdowns + year-over-year comparison + personal records + distance-per-week bar chart |
 | 6 | Default activity name | `"{type} · YYYY-MM-DD HH:MM"` — e.g. `"Hike · 2026-04-19 14:32"` |
-| 7 | BenchmarkElevation code reuse | **Fresh** implementation in TrekTracker; BenchmarkElevation untouched. No code dependency between the two apps. |
 
 The doc is now a build spec. Scaffolding next.

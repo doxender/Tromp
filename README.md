@@ -80,10 +80,6 @@ Declared in `AndroidManifest.xml`:
 
 The app prompts for fine location + notifications on first Start; background location is not yet requested (the foreground service keeps the process alive with the screen off).
 
-## Relationship to BenchmarkElevation
-
-The sibling project at `../BenchmarkElevation` shipped the GPS-averaging benchmark + barometer calibration flows first. TrekTracker re-implements them from scratch in its own package layout. There is **no code dependency** between the two apps; they evolve independently.
-
 ## Related files
 
 - `DESIGN.md` — authoritative spec.
