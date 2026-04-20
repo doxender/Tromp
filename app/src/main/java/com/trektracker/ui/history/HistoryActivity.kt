@@ -117,7 +117,11 @@ class HistoryActivity : AppCompatActivity() {
                 TrackingSession.append(
                     TrackingSession.Point(
                         lat = it.lat, lon = it.lon,
-                        elevM = it.altM, tMs = it.time,
+                        elevM = it.altM,
+                        gpsElevM = it.gpsAltM,
+                        pressureHpa = it.pressureHpa,
+                        horizAccM = it.horizAccM,
+                        tMs = it.time,
                     )
                 )
             }
