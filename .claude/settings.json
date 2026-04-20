@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where *)",
+      "Bash(adb devices)",
+      "Bash(adb version)",
+      "Bash(adb shell pidof *)",
+      "Bash(adb shell getprop *)",
+      "Bash(adb logcat *)"
+    ]
+  }
+}
