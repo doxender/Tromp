@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TrekTracker outdoor earth-tones palette (DESIGN.md §2.1) -->
+    <color name="bg_base">#141A15</color>
+    <color name="bg_surface">#1F2A22</color>
+    <color name="primary">#52B788</color>
+    <color name="primary_dark">#2D6A4F</color>
+    <color name="accent">#E8A33D</color>
+    <color name="warning">#C85450</color>
+    <color name="text_primary">#E8EDE4</color>
+    <color name="text_secondary">#8B9689</color>
+    <color name="divider">#2A3830</color>
+
+    <!-- Elevation gradient endpoints for the ribbon fallback view -->
+    <color name="ribbon_low">#3B82B5</color>
+    <color name="ribbon_mid">#E8A33D</color>
+    <color name="ribbon_high">#C85450</color>
+</resources>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TrekTracker</string>
+
+    <string name="action_start">START</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_waypoint">Drop waypoint</string>
+    <string name="action_acquire_benchmark">Acquire benchmark</string>
+    <string name="action_calibrate_barometer">Calibrate barometer</string>
+
+    <string name="benchmark_title">Acquire Benchmark</string>
+    <string name="benchmark_accept">Accept</string>
+    <string name="benchmark_retry">Retry</string>
+    <string name="benchmark_cancel">Cancel</string>
+    <string name="benchmark_active">Benchmark: %1$.1f m from %2$s</string>
+
+    <string name="calibration_title">Calibrate Barometer</string>
+    <string name="calibration_cancel">Cancel</string>
+
+    <string name="summary_title">Activity Summary</string>
+    <string name="summary_view_map">View Map</string>
+    <string name="summary_done">Done</string>
+
+    <string name="map_title">Track Map</string>
+    <string name="map_back">Back</string>
+
+    <string name="history_title">History</string>
+    <string name="history_empty">No activities yet. Record one to see it here.</string>
+    <string name="history_back">Back</string>
+
+    <string name="status_idle">Ready</string>
+    <string name="status_searching_gps">Still searching for GPS…</string>
+
+    <string name="notif_channel_tracking">TrekTracker tracking</string>
+    <string name="notif_channel_tracking_desc">Ongoing notification shown while an activity is being recorded.</string>
+    <string name="notif_tracking_title">TrekTracker</string>
+    <string name="notif_tracking_body_idle">Recording…</string>
+
+    <string name="osm_attribution">© OpenStreetMap contributors</string>
+</resources>
