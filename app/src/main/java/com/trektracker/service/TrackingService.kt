@@ -8,10 +8,12 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.hardware.SensorManager
 import com.trektracker.data.db.ActivityEntity
 import com.trektracker.data.db.TrackPointEntity
 import com.trektracker.data.db.TrekDatabase
 import com.trektracker.location.LocationSource
+import com.trektracker.sensors.BarometerSource
 import com.trektracker.tracking.AscentAccumulator
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.tracking.TrackSnapshot
@@ -45,6 +47,9 @@ class TrackingService : Service() {
         const val ACTION_START = "com.trektracker.service.ACTION_START"
         const val EXTRA_ACTIVITY_TYPE = "activity_type"
 
+        /** DESIGN.md §5.2: drop GPS fixes with horizontal accuracy worse than this. */
+        private const val ACCURACY_THRESHOLD_M: Float = 15.0f
+
         private val _snapshots = MutableStateFlow<TrackSnapshot?>(null)
         val snapshots: StateFlow<TrackSnapshot?> = _snapshots.asStateFlow()
     }
@@ -52,12 +57,17 @@ class TrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var tickerJob: Job? = null
     private var locationJob: Job? = null
+    private var barometerJob: Job? = null
     private val ascent = AscentAccumulator()
 
     private var startElapsedMs: Long = 0L
     private var lastFixLat: Double? = null
     private var lastFixLon: Double? = null
     private var maxSpeedMps: Double = 0.0
+
+    @Volatile
+    private var lastPressureHpa: Double? = null
+    private var sessionQnhHpa: Double? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -86,10 +96,12 @@ class TrackingService : Service() {
         lastFixLat = null
         lastFixLon = null
         maxSpeedMps = 0.0
+        lastPressureHpa = null
+        sessionQnhHpa = BenchmarkSession.qnhHpa
         startElapsedMs = android.os.SystemClock.elapsedRealtime()
 
         val initial = TrackSnapshot.empty(activityId, type).copy(
-            qnhHpa = BenchmarkSession.qnhHpa,
+            qnhHpa = sessionQnhHpa,
         )
         _snapshots.value = initial
         TrackingSession.lastSnapshot = initial
@@ -119,11 +131,26 @@ class TrackingService : Service() {
             .updates(intervalMs = 2_000L)
             .onEach { loc -> onLocationFix(loc) }
             .launchIn(scope)
+
+        barometerJob?.cancel()
+        val baro = BarometerSource(this)
+        barometerJob = if (sessionQnhHpa != null && baro.isAvailable) {
+            baro.readings()
+                .onEach { lastPressureHpa = it.toDouble() }
+                .launchIn(scope)
+        } else null
     }
 
     private fun onLocationFix(loc: android.location.Location) {
         val prev = _snapshots.value ?: return
         if (prev.isPaused) return
+
+        // DESIGN.md §4.3 step 2: drop fixes with horizontal accuracy worse than
+        // the threshold. Prevents noisy fixes (tunnels, canyons, cold-start
+        // scatter) from inflating distance/ascent. hasAccuracy() is effectively
+        // always true from Fused but we guard to be safe; no-accuracy fixes
+        // are treated as untrustworthy and dropped.
+        if (!loc.hasAccuracy() || loc.accuracy > ACCURACY_THRESHOLD_M) return
 
         val prevLat = lastFixLat
         val prevLon = lastFixLon
@@ -133,7 +160,16 @@ class TrackingService : Service() {
         lastFixLat = loc.latitude
         lastFixLon = loc.longitude
 
-        if (loc.hasAltitude()) ascent.add(loc.altitude)
+        // DESIGN.md §4.3 step 4: prefer barometric altitude via calibrated QNH
+        // when available; fall back to GPS altitude otherwise.
+        val gpsAlt: Double? = if (loc.hasAltitude()) loc.altitude else null
+        val pressure = lastPressureHpa
+        val qnh = sessionQnhHpa
+        val baroAlt: Double? = if (qnh != null && pressure != null) {
+            SensorManager.getAltitude(qnh.toFloat(), pressure.toFloat()).toDouble()
+        } else null
+        val chosenAlt: Double? = baroAlt ?: gpsAlt
+        if (chosenAlt != null) ascent.add(chosenAlt)
 
         val speed = if (loc.hasSpeed()) loc.speed.toDouble() else 0.0
         if (speed > maxSpeedMps) maxSpeedMps = speed
@@ -145,7 +181,7 @@ class TrackingService : Service() {
         val next = prev.copy(
             lat = loc.latitude,
             lon = loc.longitude,
-            elevationM = if (loc.hasAltitude()) loc.altitude else prev.elevationM,
+            elevationM = chosenAlt ?: prev.elevationM,
             horizontalAccuracyM = loc.accuracy,
             speedMps = speed,
             totalDistanceM = totalDist,
@@ -154,6 +190,7 @@ class TrackingService : Service() {
             avgSpeedMps = avgSpeed,
             maxSpeedMps = maxSpeedMps,
             elapsedMs = elapsed,
+            pressureHpa = pressure,
         )
         _snapshots.value = next
         TrackingSession.lastSnapshot = next
@@ -162,7 +199,10 @@ class TrackingService : Service() {
             TrackingSession.Point(
                 lat = loc.latitude,
                 lon = loc.longitude,
-                elevM = if (loc.hasAltitude()) loc.altitude else null,
+                elevM = chosenAlt,
+                gpsElevM = gpsAlt,
+                pressureHpa = pressure,
+                horizAccM = loc.accuracy,
                 tMs = System.currentTimeMillis(),
             )
         )
@@ -206,6 +246,8 @@ class TrackingService : Service() {
         tickerJob = null
         locationJob?.cancel()
         locationJob = null
+        barometerJob?.cancel()
+        barometerJob = null
         val finalSnap = _snapshots.value
         TrackingSession.lastSnapshot = finalSnap
         _snapshots.value = null
@@ -240,10 +282,10 @@ class TrackingService : Service() {
                 time = p.tMs,
                 lat = p.lat,
                 lon = p.lon,
-                altM = p.elevM ?: 0.0,
-                gpsAltM = p.elevM ?: 0.0,
-                pressureHpa = null,
-                horizAccM = 0f,
+                altM = p.elevM ?: p.gpsElevM ?: 0.0,
+                gpsAltM = p.gpsElevM ?: 0.0,
+                pressureHpa = p.pressureHpa,
+                horizAccM = p.horizAccM,
                 speedMps = 0f,
             )
         }
@@ -256,9 +298,11 @@ class TrackingService : Service() {
     override fun onDestroy() {
         tickerJob?.cancel()
         locationJob?.cancel()
+        barometerJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
+
 }
 
 /** Runs `block` once per second on the scope's dispatcher until cancelled. */

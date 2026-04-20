@@ -16,6 +16,11 @@
     <string name="benchmark_cancel">Cancel</string>
     <string name="benchmark_active">Benchmark: %1$.1f m from %2$s</string>
 
+    <string name="stale_benchmark_title">Stale benchmark</string>
+    <string name="stale_benchmark_body">Your benchmark is more than 4 hours old. Weather pressure may have changed, so altitude readings may be off. Re-benchmark?</string>
+    <string name="stale_benchmark_yes">Yes</string>
+    <string name="stale_benchmark_no">No</string>
+
     <string name="calibration_title">Calibrate Barometer</string>
     <string name="calibration_cancel">Cancel</string>
 

@@ -1,6 +1,6 @@
 # TrekTracker
 
-**Version 1.0** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**Version 1.1** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
@@ -28,7 +28,7 @@ Includes a benchmarking function so live altitude can be read from the barometer
 - Activity detail with elevation profile chart (MPAndroidChart).
 - Full stats dashboard — date-range tiles, per-type breakdowns, YoY, personal records, distance-per-week bar chart. The Room aggregate queries (`aggregateBetween`, `aggregateByTypeBetween`) already exist to back these.
 - Crash-recovery dialog, settings UI, GPX export wired to the UI.
-- Barometric altitude + accuracy filtering in the live pipeline (currently uses raw GPS altitude).
+- Auto start/stop — automatic session start/stop based on detected motion (distinct from auto-pause, which only gates an in-progress session).
 
 ## Architecture
 

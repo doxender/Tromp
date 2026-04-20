@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -112,7 +113,24 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
+        if (BenchmarkSession.isStale()) {
+            showStaleBenchmarkDialog()
+            return
+        }
         startTrackingService()
+    }
+
+    private fun showStaleBenchmarkDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.stale_benchmark_title)
+            .setMessage(R.string.stale_benchmark_body)
+            .setPositiveButton(R.string.stale_benchmark_yes) { _, _ ->
+                benchmarkLauncher.launch(Intent(this, BenchmarkActivity::class.java))
+            }
+            .setNegativeButton(R.string.stale_benchmark_no) { _, _ ->
+                startTrackingService()
+            }
+            .show()
     }
 
     private fun startTrackingService() {

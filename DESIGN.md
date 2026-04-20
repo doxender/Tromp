@@ -93,7 +93,7 @@ These are locked-in defaults unless pushed back on. Configurable via Settings wh
 | Ascent/descent hysteresis | 3 m sustained monotonic change | yes | Prevents noise inflating totals on flat ground. |
 | Activity type model | one generic model, labeled via dropdown | — | Simpler than per-type subclasses; revisit in v2. |
 | Acquire Benchmark | **optional** before start | — | Too heavy to mandate; prompted as recommended. |
-| Calibrate Barometer | per-session only | — | Weather drift stales it anyway. |
+| Calibrate Barometer | reused across sessions within a single process; auto-flagged as stale after 4 h with a Yes/No rebenchmark prompt on START | — | Weather drift stales QNH within hours; a hard cap avoids silently miscalibrated altitudes. |
 | Theme | outdoor earth-tones dark — forest green primary, warm amber accents, dark slate background (see §2.1) | — | Low-glare in daylight. |
 | Storage units | SI (m, s, m/s) internally; converted at display | — | Simplest correct approach. |
 | Crash recovery | dialog on launch: "Resume activity from HH:MM?" | — | Explicit over silent. |
