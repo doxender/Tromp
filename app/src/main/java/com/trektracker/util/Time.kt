@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Daniel V. Oxender. See LICENSE for terms.
+// This notice must be preserved in all derivative works.
 package com.trektracker.util
 
 import java.text.SimpleDateFormat

@@ -2,7 +2,7 @@
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
-Includes a GPS-averaging **benchmark acquisition** flow and a **barometer calibration** flow. The calibration step auto-locks once the last 100 pressure samples (taken every 25 ms) have σ ≤ 0.1 hPa, then computes QNH from the benchmark elevation so live altitude can be read from the barometer instead of GPS.
+Includes a benchmarking function so live altitude can be read from the barometer instead of GPS.
 
 `DESIGN.md` is the authoritative spec: requirements, color palette, user flows, Room schema, algorithms, and the Decision Log. Read it before making non-trivial changes.
 
@@ -10,8 +10,7 @@ Includes a GPS-averaging **benchmark acquisition** flow and a **barometer calibr
 
 ### Working end-to-end
 
-- **Acquire Benchmark** — 60 s of high-accuracy GPS averaging, USGS 3DEP + Open-Elevation lookups, Accept/Retry.
-- **Calibrate Barometer** — runs immediately after Accept. Samples at 25 ms, auto-locks on σ ≤ 0.1 hPa over the trailing 100-sample window, stores the computed QNH for the session.
+- **Benchmarking** — a short pre-session flow that establishes a base elevation (from DEM lookup and GPS averaging) and calibrates the barometer to that elevation, so live altitude during tracking comes from the barometer instead of GPS.
 - **Record an activity** — foreground-service tracking via `FusedLocationProviderClient`. Distance via haversine, ascent/descent via the 3 m-hysteresis accumulator from DESIGN.md §6.1. Live duration + totals on the main screen and in the ongoing notification.
 - **Stop + Summary** — final totals (duration, distance, ascent/descent, avg/max speed, point count) with a button to view the track on an OpenStreetMap polyline (osmdroid).
 - **History** — every completed activity is persisted to Room (`activity` + `track_point` tables). Main-screen clock icon opens a list with an all-time totals header. Tap an entry to reopen its Summary + Map.
@@ -90,3 +89,7 @@ The sibling project at `../BenchmarkElevation` shipped the GPS-averaging benchma
 - `DESIGN.md` — authoritative spec.
 - `CLAUDE.md` — guidance for Claude Code sessions working on this repo (build commands, conventions, scaffold status).
 - `.claude/settings.json` — project-scoped permission allowlist for read-only bash/adb commands.
+
+## License
+
+Copyright (c) 2026 Daniel V. Oxender. Released under the MIT License — see `LICENSE` for the full text. Any derivative work (fork, port, or modification) must preserve this copyright notice and the full license text.

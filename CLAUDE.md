@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> Copyright (c) 2026 Daniel V. Oxender. Licensed under the MIT License — see `LICENSE`. This notice must be preserved in all derivative works.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Start here

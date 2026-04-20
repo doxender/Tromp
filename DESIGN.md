@@ -1,5 +1,7 @@
 # TrekTracker — Design Document
 
+> Copyright (c) 2026 Daniel V. Oxender. Licensed under the MIT License — see `LICENSE`. This notice must be preserved in all derivative works.
+
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap with offline tile support; falls back to a 2D elevation-colored ribbon view when no map tiles are available. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
 Includes a GPS-averaging benchmark acquisition flow and barometer calibration flow, modeled on the sibling `BenchmarkElevation` app but implemented fresh in this project. No code dependency on BenchmarkElevation — the two apps evolve independently.
