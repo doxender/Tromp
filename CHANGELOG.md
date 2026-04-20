@@ -2,6 +2,18 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.5] — Unreleased
+
+Work on branch `StrideLength`.
+
+### Added
+- **Average stride length** on the summary screen (computed as total distance / step count, shown in feet and meters) when step data is available.
+- `StepCounterSource` wrapping `Sensor.TYPE_STEP_COUNTER` as a cold `Flow<Float>`. `TrackingService` records the baseline step count at session start and diffs against the latest sample on each fix; session steps persist on `ActivityEntity` and are restored by `HistoryActivity`.
+- `ACTIVITY_RECOGNITION` runtime permission, prompted alongside location/notifications on first START. Devices without a step counter, or users who deny the permission, get a summary without the stride line.
+
+### Changed
+- Room schema bumped from v1 to v2 with a `Migration(1, 2)` that adds the `stepCount` column to `activity`. `exportSchema = true` and kapt `room.schemaLocation` now writes generated schema JSON under `app/schemas/`.
+
 ## [1.4] — Unreleased
 
 Work on branch `SummarySpeedUnits`.

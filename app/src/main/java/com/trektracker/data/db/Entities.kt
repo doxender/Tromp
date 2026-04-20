@@ -28,6 +28,7 @@ data class ActivityEntity(
     val minGradePct: Double,
     val benchmarkElevM: Double?,
     val qnhHpa: Double?,
+    val stepCount: Int = 0,
 )
 
 @Entity(

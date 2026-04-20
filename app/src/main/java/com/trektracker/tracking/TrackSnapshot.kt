@@ -32,6 +32,8 @@ data class TrackSnapshot(
 
     val pressureHpa: Double?,
     val qnhHpa: Double?,
+
+    val stepCount: Int,
 ) {
     companion object {
         fun empty(activityId: Long, type: String) = TrackSnapshot(
@@ -47,6 +49,7 @@ data class TrackSnapshot(
             avgSpeedMps = 0.0, maxSpeedMps = 0.0,
             elapsedMs = 0L, movingMs = 0L,
             pressureHpa = null, qnhHpa = null,
+            stepCount = 0,
         )
     }
 }

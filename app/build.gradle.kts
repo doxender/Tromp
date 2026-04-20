@@ -12,8 +12,8 @@ android {
         applicationId = "com.trektracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,6 +35,13 @@ android {
     }
     packaging {
         resources.excludes += "META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+// Export Room schemas so migrations have a reviewable baseline (CLAUDE.md §3).
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
     }
 }
 
