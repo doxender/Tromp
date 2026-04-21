@@ -16,9 +16,12 @@ import com.trektracker.location.LocationSource
 import com.trektracker.sensors.BarometerSource
 import com.trektracker.sensors.StepCounterSource
 import com.trektracker.tracking.AscentAccumulator
+import com.trektracker.tracking.AutoStopDetector
+import com.trektracker.tracking.AutoStopTrimmer
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.tracking.TrackSnapshot
 import com.trektracker.tracking.TrackingSession
+import com.trektracker.util.DebugLog
 import com.trektracker.util.defaultActivityName
 import com.trektracker.util.formatDuration
 import com.trektracker.util.haversineMeters
@@ -46,7 +49,9 @@ class TrackingService : Service() {
 
     companion object {
         const val ACTION_START = "com.trektracker.service.ACTION_START"
+        const val ACTION_DISMISS_AUTO_STOP = "com.trektracker.service.ACTION_DISMISS_AUTO_STOP"
         const val EXTRA_ACTIVITY_TYPE = "activity_type"
+        const val EXTRA_TRIM_AFTER_MS = "trim_after_ms"
 
         /** DESIGN.md §5.2: drop GPS fixes with horizontal accuracy worse than this. */
         private const val ACCURACY_THRESHOLD_M: Float = 15.0f
@@ -61,6 +66,7 @@ class TrackingService : Service() {
     private var barometerJob: Job? = null
     private var stepCounterJob: Job? = null
     private val ascent = AscentAccumulator()
+    private val autoStop = AutoStopDetector()
 
     private var startElapsedMs: Long = 0L
     private var lastFixLat: Double? = null
@@ -88,15 +94,19 @@ class TrackingService : Service() {
             TrackingNotifier.ACTION_PAUSE -> updatePaused(true)
             TrackingNotifier.ACTION_RESUME -> updatePaused(false)
             TrackingNotifier.ACTION_STOP -> {
-                stopTracking()
+                val trim = intent.getLongExtra(EXTRA_TRIM_AFTER_MS, -1L).takeIf { it >= 0L }
+                stopTracking(trimAfterMs = trim)
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_DISMISS_AUTO_STOP -> dismissAutoStop()
         }
         return START_STICKY
     }
 
     private fun startTracking(type: String) {
+        DebugLog.init(this)
+        DebugLog.log("SVC", "startTracking type=$type qnh=${BenchmarkSession.qnhHpa}")
         TrackingNotifier.ensureChannel(this)
         val activityId = System.currentTimeMillis()
         TrackingSession.reset()
@@ -108,6 +118,7 @@ class TrackingService : Service() {
         sessionQnhHpa = BenchmarkSession.qnhHpa
         stepBaseline = null
         sessionStepCount = 0
+        autoStop.reset()
         startElapsedMs = android.os.SystemClock.elapsedRealtime()
 
         val initial = TrackSnapshot.empty(activityId, type).copy(
@@ -171,7 +182,13 @@ class TrackingService : Service() {
         // scatter) from inflating distance/ascent. hasAccuracy() is effectively
         // always true from Fused but we guard to be safe; no-accuracy fixes
         // are treated as untrustworthy and dropped.
-        if (!loc.hasAccuracy() || loc.accuracy > ACCURACY_THRESHOLD_M) return
+        if (!loc.hasAccuracy() || loc.accuracy > ACCURACY_THRESHOLD_M) {
+            DebugLog.log(
+                "FIX",
+                "REJECT acc=${"%.1f".format(loc.accuracy)} hasAcc=${loc.hasAccuracy()}"
+            )
+            return
+        }
 
         val prevLat = lastFixLat
         val prevLon = lastFixLon
@@ -199,6 +216,38 @@ class TrackingService : Service() {
         val totalDist = prev.totalDistanceM + addedDistance
         val avgSpeed = if (elapsed > 0) totalDist / (elapsed / 1000.0) else 0.0
 
+        // Feed the auto-stop detector; latch the signal so the UI shows
+        // exactly one prompt per trigger. The latch clears via
+        // ACTION_DISMISS_AUTO_STOP (user said "Keep going") or via stop.
+        val nowMs = System.currentTimeMillis()
+        val signal = autoStop.feed(
+            AutoStopDetector.Sample(
+                tMs = nowMs,
+                lat = loc.latitude,
+                lon = loc.longitude,
+                speedMps = speed,
+            )
+        )
+        val reason = signal?.reason ?: prev.autoStopReason
+        val trimAfter = signal?.trimAfterMs ?: prev.autoStopTrimAfterMs
+
+        val tel = autoStop.telemetry
+        DebugLog.log(
+            "FIX",
+            ("lat=%.6f lon=%.6f spd=%.2f acc=%.1f alt=%.1f " +
+                "mean=%.2f spikes=%d spikeArmed=%s " +
+                "leftHome=%s homeArmed=%s dist=%.1f dur=%ds " +
+                "signal=%s")
+                .format(
+                    loc.latitude, loc.longitude, speed, loc.accuracy,
+                    if (loc.hasAltitude()) loc.altitude else Double.NaN,
+                    tel.trailingMeanMps, tel.consecutiveSpikes, tel.spikeArmed,
+                    tel.leftHomeOnce, tel.homeArmed, tel.distFromStartM,
+                    tel.durationMs / 1000L,
+                    signal?.reason?.name ?: "-",
+                )
+        )
+
         val next = prev.copy(
             lat = loc.latitude,
             lon = loc.longitude,
@@ -213,6 +262,8 @@ class TrackingService : Service() {
             elapsedMs = elapsed,
             pressureHpa = pressure,
             stepCount = sessionStepCount,
+            autoStopReason = reason,
+            autoStopTrimAfterMs = trimAfter,
         )
         _snapshots.value = next
         TrackingSession.lastSnapshot = next
@@ -263,7 +314,16 @@ class TrackingService : Service() {
         nm.notify(TrackingNotifier.NOTIFICATION_ID, n)
     }
 
-    private fun stopTracking() {
+    private fun dismissAutoStop() {
+        val prev = _snapshots.value ?: return
+        DebugLog.log("SVC", "dismissAutoStop reason=${prev.autoStopReason}")
+        val next = prev.copy(autoStopReason = null, autoStopTrimAfterMs = null)
+        _snapshots.value = next
+        TrackingSession.lastSnapshot = next
+    }
+
+    private fun stopTracking(trimAfterMs: Long? = null) {
+        DebugLog.log("SVC", "stopTracking trimAfterMs=${trimAfterMs ?: "-"}")
         tickerJob?.cancel()
         tickerJob = null
         locationJob?.cancel()
@@ -272,10 +332,28 @@ class TrackingService : Service() {
         barometerJob = null
         stepCounterJob?.cancel()
         stepCounterJob = null
-        val finalSnap = _snapshots.value
+
+        val raw = _snapshots.value
+        val (finalSnap, pointsForPersist) = if (raw != null && trimAfterMs != null) {
+            val t = AutoStopTrimmer.trim(TrackingSession.points(), trimAfterMs)
+            val lastKeptTs = t.keptPoints.lastOrNull()?.tMs
+            val trimmedElapsed = if (lastKeptTs != null) lastKeptTs - raw.activityId else raw.elapsedMs
+            val trimmed = raw.copy(
+                totalDistanceM = t.totalDistanceM,
+                totalAscentM = t.totalAscentM,
+                totalDescentM = t.totalDescentM,
+                elapsedMs = trimmedElapsed.coerceAtLeast(0L),
+                autoStopReason = null,
+                autoStopTrimAfterMs = null,
+            )
+            trimmed to t.keptPoints
+        } else {
+            (raw?.copy(autoStopReason = null, autoStopTrimAfterMs = null)) to TrackingSession.points()
+        }
+
         TrackingSession.lastSnapshot = finalSnap
         _snapshots.value = null
-        if (finalSnap != null) persistActivity(finalSnap, TrackingSession.points())
+        if (finalSnap != null) persistActivity(finalSnap, pointsForPersist)
     }
 
     private fun persistActivity(snap: TrackSnapshot, points: List<TrackingSession.Point>) {

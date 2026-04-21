@@ -4,8 +4,6 @@
 package com.trektracker.tracking
 
 import android.content.Context
-import com.trektracker.util.METERS_PER_FOOT
-import com.trektracker.util.haversineMeters
 
 /**
  * Holds the most recently acquired benchmark. The benchmark record (location
@@ -34,66 +32,6 @@ object BenchmarkSession {
 
     @Volatile
     var qnhHpa: Double? = null
-
-    /** Decision Log row 5: benchmark/QNH older than this is considered stale. */
-    const val STALE_THRESHOLD_MS: Long = 60L * 60L * 1000L // 1 hour
-
-    /** Decision Log row 5: a benchmark taken farther than this from here is stale. */
-    val PROXIMITY_THRESHOLD_M: Double = 100.0 * METERS_PER_FOOT
-
-    /** Outcome of a staleness check against the current location. */
-    sealed class Freshness {
-        /** Benchmark is within the time and distance windows; tracking can start. */
-        object Fresh : Freshness()
-
-        /** No benchmark record at all — a full Acquire Benchmark flow is needed. */
-        object NoBenchmark : Freshness()
-
-        /**
-         * A benchmark exists and the user is still within 100 ft of it, but it
-         * is older than the time window (or was never calibrated). The stored
-         * elevation is still valid; only the barometer needs re-calibration.
-         */
-        object StaleNearby : Freshness()
-
-        /**
-         * A benchmark exists but the user has moved more than 100 ft from it
-         * (or the current location cannot be determined). The elevation is no
-         * longer reliable; a full Acquire Benchmark is needed.
-         */
-        object StaleNeedsFull : Freshness()
-    }
-
-    /**
-     * Decide whether the current benchmark is fresh enough to start tracking
-     * without a warning, or — if not — whether a fast barometer-only
-     * recalibration is enough or a full rebenchmark is required.
-     *
-     * `currentLat`/`currentLon` should be the user's current location (e.g.
-     * from `FusedLocationProviderClient.getLastLocation`). If unavailable,
-     * pass null: the check can't verify proximity and will conservatively
-     * treat any stale benchmark as needing a full rebenchmark.
-     */
-    fun check(
-        currentLat: Double?,
-        currentLon: Double?,
-        nowMs: Long = System.currentTimeMillis(),
-    ): Freshness {
-        val b = current ?: return Freshness.NoBenchmark
-
-        val distanceM: Double? = if (currentLat != null && currentLon != null) {
-            haversineMeters(b.lat, b.lon, currentLat, currentLon)
-        } else null
-        val withinDistance: Boolean = distanceM != null && distanceM <= PROXIMITY_THRESHOLD_M
-        val withinTime: Boolean = (nowMs - b.acquiredAtMs) <= STALE_THRESHOLD_MS
-        val calibrated: Boolean = qnhHpa != null
-
-        return when {
-            !withinDistance -> Freshness.StaleNeedsFull
-            withinTime && calibrated -> Freshness.Fresh
-            else -> Freshness.StaleNearby
-        }
-    }
 
     /** Persist the current benchmark (if any) to SharedPreferences. */
     fun save(context: Context) {

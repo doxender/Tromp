@@ -34,6 +34,15 @@ data class TrackSnapshot(
     val qnhHpa: Double?,
 
     val stepCount: Int,
+
+    /**
+     * Non-null when the auto-stop detector thinks this activity is over.
+     * The UI shows a confirmation dialog; accepting stops the session and
+     * trims points after [autoStopTrimAfterMs]. Cleared when the user
+     * dismisses or the session is stopped.
+     */
+    val autoStopReason: AutoStopDetector.Reason? = null,
+    val autoStopTrimAfterMs: Long? = null,
 ) {
     companion object {
         fun empty(activityId: Long, type: String) = TrackSnapshot(
@@ -50,6 +59,7 @@ data class TrackSnapshot(
             elapsedMs = 0L, movingMs = 0L,
             pressureHpa = null, qnhHpa = null,
             stepCount = 0,
+            autoStopReason = null, autoStopTrimAfterMs = null,
         )
     }
 }

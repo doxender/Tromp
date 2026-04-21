@@ -16,15 +16,16 @@
     <string name="benchmark_cancel">Cancel</string>
     <string name="benchmark_active">Benchmark: %1$.1f m from %2$s</string>
 
-    <string name="stale_benchmark_title">Stale benchmark</string>
-    <string name="no_benchmark_title">No benchmark</string>
-    <string name="no_benchmark_body">No benchmark has been acquired. Altitude readings will use raw GPS, which is less accurate. Acquire a benchmark first?</string>
-    <string name="stale_nearby_body">Your benchmark is more than 1 hour old, but you are still within 100 ft of where it was taken. You can refresh just the barometer calibration (faster), or do a full re-benchmark.</string>
-    <string name="stale_full_body">Your benchmark is stale (more than 1 hour old or more than 100 ft from this location). Altitude readings may be off. Re-benchmark?</string>
-    <string name="dialog_benchmark_now">Benchmark now</string>
-    <string name="dialog_recalibrate_baro">Refresh barometer</string>
-    <string name="dialog_rebenchmark_full">Full re-benchmark</string>
-    <string name="dialog_skip">Skip</string>
+    <string name="benchmark_required_title">Benchmark required</string>
+    <string name="benchmark_required_body">No benchmarked location within 100 ft of here. Acquire a benchmark before starting, so altitude is calibrated against a known elevation instead of raw GPS.</string>
+    <string name="benchmark_required_acquire">Acquire benchmark</string>
+
+    <string name="autostop_title">End activity?</string>
+    <string name="autostop_body">%1$s\n\nEnd here and trim %2$d trailing points (%3$.2f mi / %4$.2f km)?</string>
+    <string name="autostop_reason_speed">Your speed jumped suddenly — looks like you got in a vehicle.</string>
+    <string name="autostop_reason_home">You\'re back near where you started — looks like the activity is done.</string>
+    <string name="autostop_end_trim">End &amp; trim</string>
+    <string name="autostop_keep_going">Keep going</string>
 
     <string name="calibration_title">Calibrate Barometer</string>
     <string name="calibration_cancel">Cancel</string>
