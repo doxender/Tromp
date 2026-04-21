@@ -21,6 +21,7 @@ import com.trektracker.location.LocationSource
 import com.trektracker.sensors.BarometerSource
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.ui.calibration.CalibrationActivity
+import com.trektracker.util.DebugLog
 import com.trektracker.util.formatLocalIsoMinute
 import com.trektracker.util.haversineMeters
 import com.trektracker.util.metersToFeet
@@ -99,10 +100,22 @@ class BenchmarkActivity : AppCompatActivity() {
         binding.btnRetry.visibility = View.GONE
 
         sessionJob = lifecycleScope.launch {
+            DebugLog.init(this@BenchmarkActivity)
+            DebugLog.log("BENCH", "startAveraging useCache=$useCache")
             if (useCache) {
                 val quickFix = locationSource.lastKnown()
+                DebugLog.log(
+                    "BENCH",
+                    "lastKnown=${
+                        quickFix?.let { "lat=%.6f lon=%.6f acc=%.1f".format(it.latitude, it.longitude, it.accuracy) } ?: "null"
+                    }"
+                )
                 if (quickFix != null) {
                     val cached = findNearbyKnown(quickFix.latitude, quickFix.longitude)
+                    DebugLog.log(
+                        "BENCH",
+                        "cacheLookup hit=${cached != null} elev=${cached?.elevM} source=${cached?.source}"
+                    )
                     if (cached != null) {
                         showCachedResult(quickFix, cached)
                         return@launch
@@ -225,7 +238,9 @@ class BenchmarkActivity : AppCompatActivity() {
 
         binding.txtStatus.text = "Averaged ${fixes.size} fixes. Querying DEMs…"
 
+        DebugLog.log("BENCH", "demLookup start lat=%.6f lon=%.6f fixes=%d".format(lat, lon, fixes.size))
         val dem = withContext(Dispatchers.IO) { DemClient.lookup(lat, lon) }
+        DebugLog.log("BENCH", "demLookup result usgs=${dem.usgsElevM} open=${dem.openElevM}")
 
         val sb = StringBuilder()
         sb.appendLine("📍 %.6f, %.6f".format(lat, lon))

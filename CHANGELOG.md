@@ -2,6 +2,18 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7] — Unreleased
+
+Work on branch `AutoStopSuggestion` — phase 1 of auto start/stop, plus an auto-calibrate-on-START flow.
+
+### Added
+- **Auto-stop suggestion** during an active session. The service watches each accepted fix for two end-of-activity signals: (a) a sustained speed spike (three consecutive fixes above 3× the trailing 60 s mean AND ≥ 10 mph), which indicates the user got into a vehicle; (b) a "returned home" condition (session older than 10 min, current speed low, current position within 100 m of the session's first fix). When either fires, a dialog offers to end the activity and trim the trailing points back to just before the trigger. Choosing Keep Going suppresses re-fire until the condition clears and re-arms.
+- New pure-logic modules `tracking/AutoStopDetector` (state machine over fix stream) and `tracking/AutoStopTrimmer` (replays Haversine distance + `AscentAccumulator` over the kept fixes to recompute totals after a trim). Both have unit tests.
+- **Auto-calibrate on START**: pressing START now consults the `known_location` table using last-known GPS. If the current position is within 100 ft of a prior benchmark, the cached elevation populates `BenchmarkSession` and `CalibrationActivity` runs to lock a fresh QNH against that elevation — then tracking starts. If no cached location is within 100 ft (or last-known location is unavailable), a "Benchmark required" dialog blocks tracking until a benchmark is acquired.
+
+### Changed
+- Removed the four-way Fresh / NoBenchmark / StaleNearby / StaleNeedsFull dialog tree from `MainActivity`. The new flow collapses it to a binary: auto-calibrated start, or benchmark-required block. `BenchmarkSession.check()` and the `Freshness` sealed class are gone (dead code after the UI simplification); `STALE_THRESHOLD_MS` and `PROXIMITY_THRESHOLD_M` with it.
+
 ## [1.6] — Unreleased
 
 Work on branch `BenchmarkFix`.
