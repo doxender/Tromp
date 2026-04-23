@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -27,14 +26,19 @@ import com.trektracker.tracking.AutoStopTrimmer
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.tracking.TrackingSession
 import com.trektracker.ui.benchmark.BenchmarkActivity
+import com.trektracker.ui.benchmarks.BenchmarksActivity
 import com.trektracker.ui.calibration.CalibrationActivity
 import com.trektracker.ui.history.HistoryActivity
 import com.trektracker.ui.summary.SummaryActivity
 import com.trektracker.util.DebugLog
+import com.trektracker.util.DistanceUnit
 import com.trektracker.util.METERS_PER_FOOT
+import com.trektracker.util.UnitPrefs
+import com.trektracker.util.elevationUnit
+import com.trektracker.util.formatDistance
 import com.trektracker.util.formatDuration
+import com.trektracker.util.formatElevation
 import com.trektracker.util.haversineMeters
-import com.trektracker.util.metersToMiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -53,18 +57,31 @@ class MainActivity : AppCompatActivity() {
     private var isTracking: Boolean = false
     private var autoStopDialogShownFor: AutoStopDetector.Reason? = null
 
+    /**
+     * Full benchmark flow. On success we chain into calibration — and then,
+     * if a QNH locks, straight into tracking — so the user doesn't have to
+     * tap START again after a fresh benchmark.
+     */
     private val benchmarkLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { refreshIdleUi() }
+    ) { result ->
+        if (result.resultCode == RESULT_OK && BenchmarkSession.current != null) {
+            calibrateForStartLauncher.launch(Intent(this, CalibrationActivity::class.java))
+        } else {
+            refreshIdleUi()
+        }
+    }
 
     /**
-     * Launched by [onStartClicked] after a cached-location match. When the
-     * calibration screen finishes, start tracking iff a QNH was locked.
+     * Launched after a cached-location match at START or after a fresh
+     * benchmark completes. When calibration finishes, start tracking iff a
+     * QNH was locked.
      */
     private val calibrateForStartLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         if (BenchmarkSession.qnhHpa != null) startTrackingService()
+        else refreshIdleUi()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,12 +97,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnStart.setOnClickListener {
             if (isTracking) onStopClicked() else onStartClicked()
         }
-        binding.btnAcquireBenchmark.setOnClickListener {
-            benchmarkLauncher.launch(Intent(this, BenchmarkActivity::class.java))
-        }
-        binding.btnSettings.setOnClickListener {
-            Toast.makeText(this, "Settings — pending implementation", Toast.LENGTH_SHORT).show()
-        }
+        binding.btnSettings.setOnClickListener { showSettingsDialog() }
         binding.btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
@@ -95,19 +107,17 @@ class MainActivity : AppCompatActivity() {
                 isTracking = snap != null
                 if (snap != null) {
                     binding.btnStart.setText(R.string.action_stop)
-                    binding.btnAcquireBenchmark.isEnabled = false
-                    binding.txtStatus.text = (
-                        "%s · %.2f km · ↑%.0f m ↓%.0f m"
-                    ).format(
+                    val unit = UnitPrefs.get(this)
+                    val eUnit = unit.elevationUnit()
+                    binding.txtStatus.text = "%s · %s · ↑%s ↓%s".format(
                         formatDuration(snap.elapsedMs),
-                        snap.totalDistanceM / 1000.0,
-                        snap.totalAscentM,
-                        snap.totalDescentM,
+                        formatDistance(snap.totalDistanceM, unit),
+                        formatElevation(snap.totalAscentM, eUnit, 0),
+                        formatElevation(snap.totalDescentM, eUnit, 0),
                     )
                     maybeShowAutoStopDialog(snap.autoStopReason, snap.autoStopTrimAfterMs)
                 } else {
                     binding.btnStart.setText(R.string.action_start)
-                    binding.btnAcquireBenchmark.isEnabled = true
                     autoStopDialogShownFor = null
                     refreshIdleUi()
                 }
@@ -134,8 +144,7 @@ class MainActivity : AppCompatActivity() {
             R.string.autostop_body,
             reasonLabel(reason),
             totals.droppedPointCount,
-            totals.droppedDistanceM.metersToMiles(),
-            totals.droppedDistanceM / 1000.0,
+            formatDistance(totals.droppedDistanceM, UnitPrefs.get(this)),
         )
 
         AlertDialog.Builder(this)
@@ -176,7 +185,12 @@ class MainActivity : AppCompatActivity() {
     private fun refreshIdleUi() {
         val b = BenchmarkSession.current
         binding.txtStatus.text = if (b != null) {
-            getString(R.string.benchmark_active, b.elevM, b.source)
+            val eUnit = UnitPrefs.get(this).elevationUnit()
+            getString(
+                R.string.benchmark_active,
+                formatElevation(b.elevM, eUnit, 1),
+                b.source,
+            )
         } else {
             getString(R.string.status_idle)
         }
@@ -229,6 +243,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun beginAutoCalibratedStart(cached: KnownLocationEntity) {
+        val now = System.currentTimeMillis()
         BenchmarkSession.current = BenchmarkSession.Benchmark(
             lat = cached.lat,
             lon = cached.lon,
@@ -238,9 +253,17 @@ class MainActivity : AppCompatActivity() {
             fixCount = cached.fixCount ?: 1,
             baroAvgHpa = null,
             baroSampleCount = 0,
-            acquiredAtMs = System.currentTimeMillis(),
+            acquiredAtMs = now,
         )
         BenchmarkSession.save(this)
+        // Bump this benchmark to the top of the MRU cache, then prune to 100.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                val dao = TrekDatabase.get(this@MainActivity).knownLocations()
+                dao.touch(cached.id, now)
+                dao.trimToMostRecent(BENCHMARK_CACHE_SIZE)
+            }
+        }
         calibrateForStartLauncher.launch(Intent(this, CalibrationActivity::class.java))
     }
 
@@ -262,6 +285,43 @@ class MainActivity : AppCompatActivity() {
             .filter { it.second <= thresholdM }
             .minByOrNull { it.second }
             ?.first
+    }
+
+    private fun showSettingsDialog() {
+        val items = arrayOf(
+            getString(R.string.settings_units),
+            getString(R.string.settings_benchmarks),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_title)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showUnitsDialog()
+                    1 -> startActivity(Intent(this, BenchmarksActivity::class.java))
+                }
+            }
+            .show()
+    }
+
+    private fun showUnitsDialog() {
+        val options = arrayOf(
+            getString(R.string.units_imperial),
+            getString(R.string.units_metric),
+        )
+        val current = UnitPrefs.get(this)
+        val checked = if (current == DistanceUnit.IMPERIAL) 0 else 1
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_units_title)
+            .setSingleChoiceItems(options, checked) { dialog, which ->
+                UnitPrefs.set(
+                    this,
+                    if (which == 0) DistanceUnit.IMPERIAL else DistanceUnit.METRIC,
+                )
+                dialog.dismiss()
+                if (!isTracking) refreshIdleUi()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showBenchmarkRequiredDialog() {
@@ -327,5 +387,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQ_ACTIVITY_RECOGNITION = 102
         /** Auto-calibrate if the user is within this distance of a cached benchmark. */
         private val PROXIMITY_THRESHOLD_M: Double = 100.0 * METERS_PER_FOOT
+        /** Most-recently-used benchmarks kept on-device. Older ones are evicted. */
+        private const val BENCHMARK_CACHE_SIZE: Int = 100
     }
 }

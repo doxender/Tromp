@@ -82,7 +82,7 @@ data class OfflineRegionEntity(
  */
 @Entity(
     tableName = "known_location",
-    indices = [Index("lat"), Index("lon")],
+    indices = [Index("lat"), Index("lon"), Index("lastUsedAt")],
 )
 data class KnownLocationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -93,4 +93,10 @@ data class KnownLocationEntity(
     val recordedAt: Long,
     val horizAccM: Double?,
     val fixCount: Int?,
+    // MRU timestamp: bumped each time this benchmark is reused at START.
+    // The cache is capped at 100 entries; eviction drops the smallest values.
+    val lastUsedAt: Long = 0,
+    // User-assigned label, editable from the Benchmarks settings screen.
+    // Null = unnamed; UI falls back to "at LAT, LON".
+    val name: String? = null,
 )

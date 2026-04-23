@@ -7,10 +7,13 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.widget.EditText
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.trektracker.R
 import com.trektracker.data.db.ActivityEntity
 import com.trektracker.data.db.TrekDatabase
 import com.trektracker.databinding.ActivityHistoryBinding
@@ -18,10 +21,13 @@ import com.trektracker.databinding.ItemActivityRowBinding
 import com.trektracker.tracking.TrackSnapshot
 import com.trektracker.tracking.TrackingSession
 import com.trektracker.ui.summary.SummaryActivity
+import com.trektracker.util.DistanceUnit
+import com.trektracker.util.UnitPrefs
+import com.trektracker.util.elevationUnit
+import com.trektracker.util.formatDistance
 import com.trektracker.util.formatDuration
+import com.trektracker.util.formatElevation
 import com.trektracker.util.formatLocalIsoMinute
-import com.trektracker.util.metersToFeet
-import com.trektracker.util.metersToMiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -42,7 +48,12 @@ class HistoryActivity : AppCompatActivity() {
         binding = ActivityHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        adapter = HistoryAdapter(::openActivity)
+        adapter = HistoryAdapter(
+            unit = UnitPrefs.get(this),
+            onClick = ::openActivity,
+            onRename = ::showRenameDialog,
+            onDelete = ::confirmDelete,
+        )
         binding.list.layoutManager = LinearLayoutManager(this)
         binding.list.adapter = adapter
 
@@ -53,6 +64,8 @@ class HistoryActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Pick up any unit-setting change made while we were paused.
+        adapter.unit = UnitPrefs.get(this)
         loadData()
     }
 
@@ -75,14 +88,11 @@ class HistoryActivity : AppCompatActivity() {
         val count = list.size
         val totalDistM = list.sumOf { it.totalDistanceM }
         val totalAscentM = list.sumOf { it.totalAscentM }
-        binding.txtStats.text = (
-            "%d activities · %.1f mi (%.1f km) · ↑%.0f ft (%.0f m)"
-        ).format(
+        val unit = UnitPrefs.get(this)
+        binding.txtStats.text = "%d activities · %s · ↑%s".format(
             count,
-            totalDistM.metersToMiles(),
-            totalDistM / 1000.0,
-            totalAscentM.metersToFeet(),
-            totalAscentM,
+            formatDistance(totalDistM, unit),
+            formatElevation(totalAscentM, unit.elevationUnit(), 0),
         )
     }
 
@@ -129,10 +139,57 @@ class HistoryActivity : AppCompatActivity() {
             startActivity(Intent(this@HistoryActivity, SummaryActivity::class.java))
         }
     }
+
+    private fun showRenameDialog(activity: ActivityEntity) {
+        val input = EditText(this).apply {
+            setText(activity.name.orEmpty())
+            setSelection(text.length)
+            hint = getString(R.string.activity_rename_hint)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.activity_rename_title)
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val newName = input.text.toString().trim().ifEmpty { null }
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        TrekDatabase.get(this@HistoryActivity)
+                            .activities().rename(activity.id, newName)
+                    }
+                    loadData()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun confirmDelete(activity: ActivityEntity) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.activity_delete_confirm_title)
+            .setMessage(R.string.activity_delete_confirm_body)
+            .setPositiveButton(R.string.activity_delete) { _, _ ->
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val db = TrekDatabase.get(this@HistoryActivity)
+                        // Manual cascade: track_point and waypoint don't declare
+                        // foreign keys, so we need to clear them explicitly.
+                        db.trackPoints().deleteForActivity(activity.id)
+                        db.waypoints().deleteForActivity(activity.id)
+                        db.activities().deleteById(activity.id)
+                    }
+                    loadData()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
 }
 
 private class HistoryAdapter(
+    var unit: DistanceUnit,
     private val onClick: (ActivityEntity) -> Unit,
+    private val onRename: (ActivityEntity) -> Unit,
+    private val onDelete: (ActivityEntity) -> Unit,
 ) : RecyclerView.Adapter<HistoryAdapter.VH>() {
 
     private val items = mutableListOf<ActivityEntity>()
@@ -150,21 +207,21 @@ private class HistoryAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val a = items[position]
-        holder.bind(a)
+        holder.bind(a, unit)
         holder.itemView.setOnClickListener { onClick(a) }
+        holder.b.btnRename.setOnClickListener { onRename(a) }
+        holder.b.btnDelete.setOnClickListener { onDelete(a) }
     }
 
     override fun getItemCount(): Int = items.size
 
-    class VH(private val b: ItemActivityRowBinding) : RecyclerView.ViewHolder(b.root) {
-        fun bind(a: ActivityEntity) {
+    class VH(val b: ItemActivityRowBinding) : RecyclerView.ViewHolder(b.root) {
+        fun bind(a: ActivityEntity, unit: DistanceUnit) {
             b.txtName.text = a.name ?: a.type
             b.txtMeta.text = formatLocalIsoMinute(a.startTime)
-            b.txtStats.text = (
-                "%.2f mi · ↑%.0f ft · %s"
-            ).format(
-                a.totalDistanceM.metersToMiles(),
-                a.totalAscentM.metersToFeet(),
+            b.txtStats.text = "%s · ↑%s · %s".format(
+                formatDistance(a.totalDistanceM, unit),
+                formatElevation(a.totalAscentM, unit.elevationUnit(), 0),
                 formatDuration(a.elapsedMs),
             )
         }

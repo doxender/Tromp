@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OfflineRegionEntity::class,
         KnownLocationEntity::class,
     ],
-    version = 3,
+    version = 5,
     exportSchema = true,
 )
 abstract class TrekDatabase : RoomDatabase() {
@@ -63,6 +63,27 @@ abstract class TrekDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4: adds `lastUsedAt` to `known_location` for LRU eviction. */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE known_location ADD COLUMN lastUsedAt INTEGER NOT NULL DEFAULT 0"
+                )
+                // Seed with recordedAt so pre-migration rows have a sensible MRU order.
+                db.execSQL("UPDATE known_location SET lastUsedAt = recordedAt")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_known_location_lastUsedAt ON known_location(lastUsedAt)"
+                )
+            }
+        }
+
+        /** v4 → v5: adds nullable `name` column for user-assigned benchmark labels. */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE known_location ADD COLUMN name TEXT")
+            }
+        }
+
         fun get(context: Context): TrekDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -70,7 +91,9 @@ abstract class TrekDatabase : RoomDatabase() {
                     TrekDatabase::class.java,
                     "trektracker.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                    )
                     .build()
                     .also { instance = it }
             }

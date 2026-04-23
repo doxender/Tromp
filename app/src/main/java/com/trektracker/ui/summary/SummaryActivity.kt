@@ -10,11 +10,12 @@ import androidx.appcompat.app.AppCompatActivity
 import com.trektracker.databinding.ActivitySummaryBinding
 import com.trektracker.tracking.TrackingSession
 import com.trektracker.ui.map.MapActivity
+import com.trektracker.util.UnitPrefs
+import com.trektracker.util.elevationUnit
+import com.trektracker.util.formatDistance
 import com.trektracker.util.formatDuration
-import com.trektracker.util.metersToFeet
-import com.trektracker.util.metersToMiles
-import com.trektracker.util.mpsToKmh
-import com.trektracker.util.mpsToMph
+import com.trektracker.util.formatElevation
+import com.trektracker.util.formatSpeed
 
 /**
  * Post-activity summary: totals + a link to the map. Reads from the in-memory
@@ -36,25 +37,19 @@ class SummaryActivity : AppCompatActivity() {
             binding.txtTotals.text = "No activity data."
             binding.btnMap.visibility = View.GONE
         } else {
-            val distMi = snap.totalDistanceM.metersToMiles()
-            val ascentFt = snap.totalAscentM.metersToFeet()
-            val descentFt = snap.totalDescentM.metersToFeet()
-            val avgKmh = snap.avgSpeedMps.mpsToKmh()
-            val avgMph = snap.avgSpeedMps.mpsToMph()
-            val maxKmh = snap.maxSpeedMps.mpsToKmh()
-            val maxMph = snap.maxSpeedMps.mpsToMph()
-
+            val unit = UnitPrefs.get(this)
+            val eUnit = unit.elevationUnit()
             binding.txtTotals.text = buildString {
                 appendLine("Duration:  ${formatDuration(snap.elapsedMs)}")
-                appendLine("Distance:  %.2f mi (%.2f km)".format(distMi, snap.totalDistanceM / 1000.0))
-                appendLine("Ascent:    %.0f ft (%.0f m)".format(ascentFt, snap.totalAscentM))
-                appendLine("Descent:   %.0f ft (%.0f m)".format(descentFt, snap.totalDescentM))
-                appendLine("Avg speed: %.1f km/h · %.2f m/s · %.1f mph".format(avgKmh, snap.avgSpeedMps, avgMph))
-                appendLine("Max speed: %.1f km/h · %.2f m/s · %.1f mph".format(maxKmh, snap.maxSpeedMps, maxMph))
+                appendLine("Distance:  ${formatDistance(snap.totalDistanceM, unit)}")
+                appendLine("Ascent:    ${formatElevation(snap.totalAscentM, eUnit, 0)}")
+                appendLine("Descent:   ${formatElevation(snap.totalDescentM, eUnit, 0)}")
+                appendLine("Avg speed: ${formatSpeed(snap.avgSpeedMps, unit)}")
+                appendLine("Max speed: ${formatSpeed(snap.maxSpeedMps, unit)}")
                 if (snap.stepCount > 0 && snap.totalDistanceM > 0) {
                     val strideM = snap.totalDistanceM / snap.stepCount
                     appendLine("Steps:     ${snap.stepCount}")
-                    appendLine("Stride:    %.2f ft (%.2f m)".format(strideM.metersToFeet(), strideM))
+                    appendLine("Stride:    ${formatElevation(strideM, eUnit, 2)}")
                 }
                 appendLine("Points:    ${points.size}")
             }

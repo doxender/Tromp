@@ -5,10 +5,7 @@
     android:layout_height="wrap_content"
     android:layout_marginVertical="4dp"
     android:padding="12dp"
-    android:background="@color/bg_surface"
-    android:foreground="?attr/selectableItemBackground"
-    android:clickable="true"
-    android:focusable="true">
+    android:background="@color/bg_surface">
 
     <TextView
         android:id="@+id/txtName"
@@ -27,20 +24,20 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
+        android:textColor="@color/accent"
+        android:textSize="13sp"
         android:fontFamily="monospace"
         app:layout_constraintTop_toBottomOf="@id/txtName"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/btnRename" />
 
     <TextView
-        android:id="@+id/txtStats"
+        android:id="@+id/txtDates"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="@color/accent"
-        android:textSize="13sp"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
         android:fontFamily="monospace"
         app:layout_constraintTop_toBottomOf="@id/txtMeta"
         app:layout_constraintStart_toStartOf="parent"
@@ -52,7 +49,7 @@
         android:layout_height="40dp"
         android:src="@android:drawable/ic_menu_edit"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/activity_rename"
+        android:contentDescription="@string/benchmarks_rename"
         app:tint="@color/text_secondary"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toStartOf="@id/btnDelete" />
@@ -63,7 +60,7 @@
         android:layout_height="40dp"
         android:src="@android:drawable/ic_menu_delete"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/activity_delete"
+        android:contentDescription="@string/benchmarks_delete"
         app:tint="@color/text_secondary"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

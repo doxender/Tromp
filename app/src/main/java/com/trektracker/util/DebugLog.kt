@@ -47,7 +47,7 @@ object DebugLog {
             if (f.length() > MAX_BYTES) {
                 f.writeText("[log truncated at ${f.length()} bytes]\n")
             }
-            f.appendText("${fmt.get().format(Date())} $tag $line\n")
+            f.appendText("${fmt.get()!!.format(Date())} $tag $line\n")
         } catch (t: Throwable) {
             Log.w(TAG, "log failed: ${t.javaClass.simpleName} ${t.message}")
         }

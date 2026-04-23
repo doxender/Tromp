@@ -12,7 +12,9 @@ import com.trektracker.databinding.ActivityCalibrationBinding
 import com.trektracker.sensors.BarometerSource
 import com.trektracker.tracking.BenchmarkSession
 import com.trektracker.tracking.computeQnhHpa
-import com.trektracker.util.metersToFeet
+import com.trektracker.util.UnitPrefs
+import com.trektracker.util.elevationUnit
+import com.trektracker.util.formatElevation
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -70,11 +72,16 @@ class CalibrationActivity : AppCompatActivity() {
             return
         }
 
+        val eUnit = UnitPrefs.get(this).elevationUnit()
         binding.txtSummary.text = (
-            "Benchmark: %.2f m / %.2f ft (%s)\n" +
+            "Benchmark: %s (%s)\n" +
             "Sampling barometer at 25 ms…\n" +
             "Auto-locks when σ of last 100 samples ≤ %.2f hPa."
-        ).format(benchmark.elevM, benchmark.elevM.metersToFeet(), benchmark.source, STDEV_THRESHOLD_HPA)
+        ).format(
+            formatElevation(benchmark.elevM, eUnit, 2),
+            benchmark.source,
+            STDEV_THRESHOLD_HPA,
+        )
 
         sampleJob = barometerSource.readings(samplingPeriodUs = SAMPLING_PERIOD_US)
             .onEach { p -> onReading(p, benchmark.elevM) }

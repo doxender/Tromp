@@ -4,7 +4,6 @@
 package com.trektracker.ui.benchmark
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -20,11 +19,13 @@ import com.trektracker.elevation.DemClient
 import com.trektracker.location.LocationSource
 import com.trektracker.sensors.BarometerSource
 import com.trektracker.tracking.BenchmarkSession
-import com.trektracker.ui.calibration.CalibrationActivity
 import com.trektracker.util.DebugLog
+import com.trektracker.util.UnitPrefs
+import com.trektracker.util.elevationUnit
+import com.trektracker.util.formatElevation
+import com.trektracker.util.formatElevationDelta
 import com.trektracker.util.formatLocalIsoMinute
 import com.trektracker.util.haversineMeters
-import com.trektracker.util.metersToFeet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -180,14 +181,15 @@ class BenchmarkActivity : AppCompatActivity() {
 
     private fun showCachedResult(fix: android.location.Location, cached: KnownLocationEntity) {
         val distM = haversineMeters(fix.latitude, fix.longitude, cached.lat, cached.lon)
+        val eUnit = UnitPrefs.get(this).elevationUnit()
         val sb = StringBuilder()
         sb.appendLine("📍 %.6f, %.6f".format(fix.latitude, fix.longitude))
         sb.appendLine()
         sb.appendLine("━━ CACHED BENCHMARK ━━")
-        sb.appendLine("%.2f m / %.2f ft".format(cached.elevM, cached.elevM.metersToFeet()))
+        sb.appendLine(formatElevation(cached.elevM, eUnit, 2))
         sb.appendLine("source: ${cached.source}")
         sb.appendLine("recorded: ${formatLocalIsoMinute(cached.recordedAt)}")
-        sb.appendLine("distance from fix: %.1f m / %.1f ft".format(distM, distM.metersToFeet()))
+        sb.appendLine("distance from fix: ${formatElevation(distM, eUnit, 1)}")
         sb.appendLine()
         sb.appendLine("You are within ${PROXIMITY_THRESHOLD_M.toInt()} m of a previously benchmarked spot.")
         sb.appendLine("Accept to skip the 60 s average, or Retry to run a full benchmark anyway.")
@@ -210,14 +212,11 @@ class BenchmarkActivity : AppCompatActivity() {
 
     private fun updateLive() {
         val last = fixes.lastOrNull() ?: return
+        val eUnit = UnitPrefs.get(this).elevationUnit()
         binding.txtStatus.text =
-            "Fixes: ${fixes.size}  ±%.1f m / %.1f ft horiz\n".format(
-                last.accuracy, last.accuracy.toDouble().metersToFeet()
-            ) +
-            "GPS alt: %.1f m / %.1f ft  ±%.1f m / %.1f ft".format(
-                last.altitude, last.altitude.metersToFeet(),
-                last.verticalAccuracyMeters, last.verticalAccuracyMeters.toDouble().metersToFeet()
-            )
+            "Fixes: ${fixes.size}  ±${formatElevation(last.accuracy.toDouble(), eUnit, 1)} horiz\n" +
+            "GPS alt: ${formatElevation(last.altitude, eUnit, 1)}  " +
+            "±${formatElevation(last.verticalAccuracyMeters.toDouble(), eUnit, 1)}"
     }
 
     private suspend fun computeAndShow() {
@@ -242,23 +241,25 @@ class BenchmarkActivity : AppCompatActivity() {
         val dem = withContext(Dispatchers.IO) { DemClient.lookup(lat, lon) }
         DebugLog.log("BENCH", "demLookup result usgs=${dem.usgsElevM} open=${dem.openElevM}")
 
+        val eUnit = UnitPrefs.get(this).elevationUnit()
         val sb = StringBuilder()
         sb.appendLine("📍 %.6f, %.6f".format(lat, lon))
-        sb.appendLine("   ±%.1f m / %.1f ft horizontal".format(horizAcc, horizAcc.metersToFeet()))
+        sb.appendLine("   ±${formatElevation(horizAcc, eUnit, 1)} horizontal")
         sb.appendLine()
         sb.appendLine("━━ ELEVATION SOURCES ━━")
         sb.appendLine()
         sb.appendLine("GPS (ellipsoidal, WGS84)")
         sb.appendLine(
-            "  %.1f m / %.1f ft  σ=%.1f m / %.1f ft (n=${fixes.size})".format(
-                gpsAltMean, gpsAltMean.metersToFeet(), gpsAltStdev, gpsAltStdev.metersToFeet()
+            "  %s  σ=%s (n=${fixes.size})".format(
+                formatElevation(gpsAltMean, eUnit, 1),
+                formatElevation(gpsAltStdev, eUnit, 1),
             )
         )
         sb.appendLine("  note: not orthometric; subtract geoid")
         sb.appendLine()
         dem.usgsElevM?.let {
             sb.appendLine("✓ USGS 3DEP (orthometric, NAVD88)")
-            sb.appendLine("  %.2f m / %.2f ft".format(it, it.metersToFeet()))
+            sb.appendLine("  ${formatElevation(it, eUnit, 2)}")
             sb.appendLine("  typical accuracy: ~0.1–1 m")
             sb.appendLine()
         } ?: run {
@@ -267,7 +268,7 @@ class BenchmarkActivity : AppCompatActivity() {
         }
         dem.openElevM?.let {
             sb.appendLine("✓ Open-Elevation (SRTM, global)")
-            sb.appendLine("  %.1f m / %.1f ft".format(it, it.metersToFeet()))
+            sb.appendLine("  ${formatElevation(it, eUnit, 1)}")
             sb.appendLine("  typical accuracy: ~5–10 m")
             sb.appendLine()
         } ?: run {
@@ -285,9 +286,9 @@ class BenchmarkActivity : AppCompatActivity() {
         if (bestElev != null && bestSource != null) {
             val delta = gpsAltMean - bestElev
             sb.appendLine("━━ RECOMMENDED BENCHMARK ━━")
-            sb.appendLine("%.2f m / %.2f ft".format(bestElev, bestElev.metersToFeet()))
+            sb.appendLine(formatElevation(bestElev, eUnit, 2))
             sb.appendLine("source: $bestSource")
-            sb.appendLine("GPS − DEM = %+.1f m / %+.1f ft".format(delta, delta.metersToFeet()))
+            sb.appendLine("GPS − DEM = ${formatElevationDelta(delta, eUnit, 1)}")
             binding.btnAccept.visibility = View.VISIBLE
             pendingResult = PendingResult(lat, lon, bestElev, bestSource, horizAcc, baroAvg)
             binding.txtStatus.text = "Done. Review and accept, or retry."
@@ -295,17 +296,21 @@ class BenchmarkActivity : AppCompatActivity() {
             // Cache the newly-resolved elevation so next time we hit this
             // spot we can skip the 60 s flow. Best-effort: if the insert
             // fails we still proceed normally.
+            val now = System.currentTimeMillis()
             val entry = KnownLocationEntity(
                 lat = lat, lon = lon,
                 elevM = bestElev,
                 source = bestSource,
-                recordedAt = System.currentTimeMillis(),
+                recordedAt = now,
                 horizAccM = horizAcc,
                 fixCount = fixes.size,
+                lastUsedAt = now,
             )
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    TrekDatabase.get(this@BenchmarkActivity).knownLocations().insert(entry)
+                    val dao = TrekDatabase.get(this@BenchmarkActivity).knownLocations()
+                    dao.insert(entry)
+                    dao.trimToMostRecent(BENCHMARK_CACHE_SIZE)
                 } catch (_: Exception) { /* best-effort cache; ignore */ }
             }
         } else {
@@ -332,8 +337,10 @@ class BenchmarkActivity : AppCompatActivity() {
             acquiredAtMs = System.currentTimeMillis(),
         )
         BenchmarkSession.save(this)
+        // Don't launch CalibrationActivity here — MainActivity chains
+        // benchmark → calibration → tracking via its launchers so the final
+        // step can auto-start the service with QNH in hand.
         setResult(RESULT_OK)
-        startActivity(Intent(this, CalibrationActivity::class.java))
         finish()
     }
 
@@ -375,5 +382,7 @@ class BenchmarkActivity : AppCompatActivity() {
         private const val SAMPLE_DURATION_MS = 60_000L
         /** Cache-hit radius: within this distance we reuse a prior benchmark. */
         private const val PROXIMITY_THRESHOLD_M: Double = 50.0
+        /** Most-recently-used benchmarks kept on-device. Older ones are evicted. */
+        private const val BENCHMARK_CACHE_SIZE: Int = 100
     }
 }
