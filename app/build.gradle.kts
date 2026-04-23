@@ -12,15 +12,31 @@ android {
         applicationId = "com.trektracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.10"
+        versionCode = 12
+        versionName = "1.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing. The keystore (app/release.keystore) and its passwords
+    // are committed to the repo on purpose — this is a personal side-loaded
+    // app, not a Play Store build, so there's nothing to protect. Anyone who
+    // rebuilds from source gets a byte-identical signed APK, which lets
+    // updates install over existing installs without wiping data. Do NOT
+    // reuse this keystore for anything you'd ship to Google Play.
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "trekRelease2026"
+            keyAlias = "trektracker"
+            keyPassword = "trekRelease2026"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

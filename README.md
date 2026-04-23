@@ -1,12 +1,29 @@
 # TrekTracker
 
-**Version 1.10** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**Version 1.11** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
 Includes a benchmarking function so live altitude can be read from the barometer instead of GPS.
 
 `DESIGN.md` is the authoritative spec: requirements, color palette, user flows, Room schema, algorithms, and the Decision Log. Read it before making non-trivial changes.
+
+## Installing
+
+Every push to this repo builds a signed release APK via GitHub Actions. Grab it one of two ways:
+
+- **Tagged release** (recommended for everyday use): open the [Releases page](../../releases) and download `app-release.apk` from the latest `v*` tag. Each tag push attaches an APK automatically.
+- **Latest build of any branch**: open the [Actions tab](../../actions), click the most recent successful run, and download the `trektracker-…` artifact (zip) from the bottom of the run page. Retained for 90 days.
+
+Install on-device:
+
+1. Download the APK on your Android phone (Chrome, Files, whatever).
+2. Open the file. Android will prompt to allow installs from this source — grant it for the app you downloaded it with.
+3. Tap Install. Subsequent versions install over the existing one without wiping data, because all APKs from this repo are signed with the same committed keystore.
+
+### About the release keystore
+
+`app/release.keystore` is **intentionally committed** to this repo along with its passwords (in `app/build.gradle.kts`). This is a personal, side-loaded app — not a Play Store build — so there's nothing to protect. The upside is that anyone can rebuild from source and produce a byte-identical signed APK that installs as an update to the official one. **Do not reuse this keystore for anything you'd ship on Google Play.**
 
 ## Status
 
