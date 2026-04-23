@@ -60,6 +60,9 @@ interface ActivityDao {
 
     @Query("DELETE FROM activity WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("UPDATE activity SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String?)
 }
 
 data class StatsRow(
@@ -129,6 +132,33 @@ interface KnownLocationDao {
 
     @Query("SELECT COUNT(*) FROM known_location")
     suspend fun count(): Int
+
+    /** Bump a row's MRU timestamp — called when a benchmark is reused at START. */
+    @Query("UPDATE known_location SET lastUsedAt = :ts WHERE id = :id")
+    suspend fun touch(id: Long, ts: Long)
+
+    /**
+     * LRU eviction: keep the [keep] most-recently-used rows, delete the rest.
+     * Runs after every insert / touch so the cache is bounded at [keep] rows.
+     */
+    @Query(
+        """
+        DELETE FROM known_location WHERE id NOT IN (
+            SELECT id FROM known_location ORDER BY lastUsedAt DESC LIMIT :keep
+        )
+        """
+    )
+    suspend fun trimToMostRecent(keep: Int)
+
+    /** All benchmarks, MRU first — used by the Benchmarks settings screen. */
+    @Query("SELECT * FROM known_location ORDER BY lastUsedAt DESC, recordedAt DESC")
+    suspend fun allMruDesc(): List<KnownLocationEntity>
+
+    @Query("UPDATE known_location SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String?)
+
+    @Query("DELETE FROM known_location WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao

@@ -17,6 +17,10 @@ fun Double.mpsToMph(): Double = this * 3.6 / 1.609344
 enum class DistanceUnit { METRIC, IMPERIAL }
 enum class ElevationUnit { METERS, FEET }
 
+/** One user-visible setting drives everything else. */
+fun DistanceUnit.elevationUnit(): ElevationUnit =
+    if (this == DistanceUnit.METRIC) ElevationUnit.METERS else ElevationUnit.FEET
+
 fun formatDistance(meters: Double, unit: DistanceUnit): String = when (unit) {
     DistanceUnit.METRIC -> if (meters < 1000) "%.0f m".format(meters)
                           else "%.2f km".format(meters.metersToKm())
@@ -24,9 +28,18 @@ fun formatDistance(meters: Double, unit: DistanceUnit): String = when (unit) {
                              else "%.2f mi".format(meters.metersToMiles())
 }
 
-fun formatElevation(meters: Double, unit: ElevationUnit): String = when (unit) {
-    ElevationUnit.METERS -> "%.1f m".format(meters)
-    ElevationUnit.FEET -> "%.1f ft".format(meters.metersToFeet())
+/** Signed elevation/accuracy/length at the meter scale. Precision is caller's choice. */
+fun formatElevation(meters: Double, unit: ElevationUnit, decimals: Int = 1): String {
+    val v = if (unit == ElevationUnit.METERS) meters else meters.metersToFeet()
+    val suffix = if (unit == ElevationUnit.METERS) "m" else "ft"
+    return "%.${decimals}f $suffix".format(v)
+}
+
+/** Signed delta (always prints +/−). */
+fun formatElevationDelta(meters: Double, unit: ElevationUnit, decimals: Int = 1): String {
+    val v = if (unit == ElevationUnit.METERS) meters else meters.metersToFeet()
+    val suffix = if (unit == ElevationUnit.METERS) "m" else "ft"
+    return "%+.${decimals}f $suffix".format(v)
 }
 
 fun formatSpeed(mps: Double, unit: DistanceUnit): String = when (unit) {

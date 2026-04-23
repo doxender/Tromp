@@ -2,6 +2,50 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.10] — Unreleased
+
+Continued work on branch `cleanup`.
+
+### Added
+- **Rename / delete activities** from the History screen. Each row now has edit and trash icons next to the existing tap-to-open affordance. Delete prompts for confirmation and manually cascades through `track_point` and `waypoint` (those tables don't declare foreign keys on `activity.id`). Rename opens an EditText dialog; a blank name clears the field so the default derived name is used.
+- **Coordinates shown on every benchmark row** at 2 decimal places (roughly ±1 km) so each cached benchmark is identifiable at a glance, even when named.
+- `ActivityDao.rename(id, name)` — single-field `UPDATE` that avoids a read-modify-write round trip.
+
+### Changed
+- Benchmarks rows no longer fall back to `"at LAT, LON"` in the title line when unnamed; they show `"Unnamed"` instead, since the coordinates are now displayed on the meta line for all rows.
+
+## [1.9] — Unreleased
+
+Continued work on branch `cleanup`.
+
+### Added
+- **Benchmarks management screen.** Settings gear now opens a dialog with two items: Units, and Manage benchmarks. The new `BenchmarksActivity` lists all cached benchmarks in MRU order with their elevation, source, last-used and recorded timestamps. Each row has Rename (EditText dialog) and Delete (confirmation dialog) affordances.
+- `KnownLocationEntity.name: String?` — user-assignable label. Row headers fall back to `"at LAT, LON"` when unnamed.
+
+### Changed
+- **Fresh benchmark auto-starts tracking.** After a full benchmark flow, the app now chains `BenchmarkActivity → CalibrationActivity → startTrackingService` automatically (previously it returned to the idle main screen and the user had to tap START again). The chain lives in `MainActivity` launchers; `BenchmarkActivity.acceptAndReturn` just saves and returns `RESULT_OK` now.
+
+### Schema
+- Room **v4 → v5**: adds nullable `name` column to `known_location`. No data migration required (existing rows default to null).
+
+## [1.8] — Unreleased
+
+Work on branch `cleanup` — UI unit preference, LRU benchmark cache, and toolchain fixes for Kotlin 2.2.
+
+### Added
+- **Unit preference** (Imperial / Metric) reached via the gear on the main screen. A single-choice dialog writes the selection to `SharedPreferences` (`util/UnitPrefs`); every user-facing screen (main, summary, history, benchmark, calibration) now shows the selected unit only. Internal storage and calculations remain metric SI per CLAUDE.md conventions.
+- **LRU eviction for the known-location benchmark cache.** A new `lastUsedAt` column is bumped whenever a benchmark is reused at START; `trimToMostRecent(100)` runs after every insert or touch, so the cache stays capped at the 100 most-recently-used benchmarks and the oldest drop off the tail.
+
+### Changed
+- **Removed the Acquire-Benchmark button** from the main screen. The "Benchmark required" dialog launched from START remains the entry to `BenchmarkActivity`.
+- **All dual-unit displays collapsed to single-unit** using the new `formatDistance` / `formatElevation` / `formatElevationDelta` / `formatSpeed` helpers in `util/Units.kt`. Strings `benchmark_active` and `autostop_body` in `strings.xml` were reshaped to accept pre-formatted distance/elevation strings instead of raw numbers + hardcoded unit suffixes.
+- **Kotlin annotation processing migrated from kapt to KSP.** With Kotlin 2.2.10, the old `kotlin.kapt` 1.9.24 plugin + Room 2.6.1's bundled `kotlinx-metadata-jvm` failed with `Metadata version 2.2.0 > maximum supported 2.0.0`. Switched to `com.google.devtools.ksp` 2.2.10-2.0.2 and bumped Room to 2.7.2 (Room ≥ 2.7 is required for KSP2 + Kotlin 2.2).
+- **Cleaned up deprecated AGP flags** in `gradle.properties`: removed five flags that now match AGP 9.0 defaults. Kept `android.builtInKotlin=false` (we apply our own Kotlin plugin) and `android.newDsl=false` (something in the build path still uses the legacy variant API).
+- Null-safety warning in `DebugLog.kt` resolved with `ThreadLocal.get()!!` (guaranteed non-null by `withInitial`).
+
+### Schema
+- Room **v3 → v4**: adds `lastUsedAt INTEGER NOT NULL DEFAULT 0` to `known_location` with an index; `MIGRATION_3_4` seeds `lastUsedAt = recordedAt` for existing rows so pre-upgrade benchmarks have a sensible MRU order.
+
 ## [1.7] — Unreleased
 
 Work on branch `AutoStopSuggestion` — phase 1 of auto start/stop, plus an auto-calibrate-on-START flow.

@@ -73,6 +73,12 @@
             android:label="@string/history_title"
             android:parentActivityName=".ui.main.MainActivity" />
 
+        <activity
+            android:name=".ui.benchmarks.BenchmarksActivity"
+            android:exported="false"
+            android:label="@string/benchmarks_title"
+            android:parentActivityName=".ui.main.MainActivity" />
+
         <service
             android:name=".service.TrackingService"
             android:enabled="true"

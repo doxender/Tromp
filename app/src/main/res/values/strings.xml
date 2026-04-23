@@ -14,14 +14,40 @@
     <string name="benchmark_accept">Accept</string>
     <string name="benchmark_retry">Retry</string>
     <string name="benchmark_cancel">Cancel</string>
-    <string name="benchmark_active">Benchmark: %1$.1f m from %2$s</string>
+    <string name="benchmark_active">Benchmark: %1$s from %2$s</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_benchmarks">Manage benchmarks</string>
+    <string name="settings_units_title">Units</string>
+    <string name="units_imperial">Imperial (mi, ft)</string>
+    <string name="units_metric">Metric (km, m)</string>
+
+    <string name="benchmarks_title">Benchmarks</string>
+    <string name="benchmarks_empty">No benchmarks yet. Record one from the START flow.</string>
+    <string name="benchmarks_back">Back</string>
+    <string name="benchmarks_rename">Rename</string>
+    <string name="benchmarks_delete">Delete</string>
+    <string name="benchmarks_rename_title">Rename benchmark</string>
+    <string name="benchmarks_rename_hint">Name (blank to clear)</string>
+    <string name="benchmarks_delete_confirm_title">Delete benchmark?</string>
+    <string name="benchmarks_delete_confirm_body">This removes the cached elevation. You\'ll need a fresh 60 s benchmark at this spot next time.</string>
+    <string name="benchmarks_unnamed">Unnamed</string>
+    <string name="benchmarks_coords">%1$.2f, %2$.2f</string>
+
+    <string name="activity_rename">Rename</string>
+    <string name="activity_delete">Delete</string>
+    <string name="activity_rename_title">Rename activity</string>
+    <string name="activity_rename_hint">Name (blank for default)</string>
+    <string name="activity_delete_confirm_title">Delete activity?</string>
+    <string name="activity_delete_confirm_body">This removes the activity along with all of its track points and waypoints. This cannot be undone.</string>
 
     <string name="benchmark_required_title">Benchmark required</string>
     <string name="benchmark_required_body">No benchmarked location within 100 ft of here. Acquire a benchmark before starting, so altitude is calibrated against a known elevation instead of raw GPS.</string>
     <string name="benchmark_required_acquire">Acquire benchmark</string>
 
     <string name="autostop_title">End activity?</string>
-    <string name="autostop_body">%1$s\n\nEnd here and trim %2$d trailing points (%3$.2f mi / %4$.2f km)?</string>
+    <string name="autostop_body">%1$s\n\nEnd here and trim %2$d trailing points (%3$s)?</string>
     <string name="autostop_reason_speed">Your speed jumped suddenly — looks like you got in a vehicle.</string>
     <string name="autostop_reason_home">You\'re back near where you started — looks like the activity is done.</string>
     <string name="autostop_end_trim">End &amp; trim</string>
