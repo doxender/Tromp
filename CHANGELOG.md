@@ -2,6 +2,18 @@
 
 All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.11] — Unreleased
+
+Work on branch `ci-workflow` — CI builds, release signing, and install-from-GitHub docs.
+
+### Added
+- **GitHub Actions build workflow** at `.github/workflows/build.yml`. Every push (any branch) builds a signed release APK and uploads it as a 90-day artifact; tag pushes matching `v*` additionally attach the APK to an auto-generated GitHub Release with generated release notes.
+- **Committed release keystore** at `app/release.keystore` (RSA 4096, 100-year cert), with passwords in `app/build.gradle.kts`. Lets every rebuild produce a byte-identical signed APK so updates install over each other without wiping data. Clearly labeled in the README as side-loading-only — not for Play Store distribution.
+- **Install instructions in the README** pointing at the Releases page and the Actions artifacts list.
+
+### Changed
+- `buildTypes.release` now wires `signingConfig = signingConfigs.getByName("release")`. Debug builds are unaffected.
+
 ## [1.10] — Unreleased
 
 Continued work on branch `cleanup`.
