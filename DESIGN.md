@@ -1,4 +1,4 @@
-# TrekTracker — Design Document
+# Tromp — Design Document
 
 > Copyright (c) 2026 Daniel V. Oxender. Licensed under the MIT License — see `LICENSE`. This notice must be preserved in all derivative works.
 
@@ -148,7 +148,7 @@ Track polyline on map: `#52B788` with 70% opacity, 4 dp stroke. Ribbon fallback 
 - **Pause** / **Stop** buttons.
 
 ### 3.5 Backgrounded tracking
-- Status-bar notification: "TrekTracker · 2.4 km · 01:23:10" + Pause + Stop actions.
+- Status-bar notification: "Tromp · 2.4 km · 01:23:10" + Pause + Stop actions.
 - Tap body → reopen live screen.
 - Low-importance channel: no sound, no vibration, no heads-up.
 
@@ -400,7 +400,7 @@ All initial open questions resolved 2026-04-19.
 
 | # | Question | Decision |
 |---|---|---|
-| 1 | App name | **TrekTracker** |
+| 1 | App name | **Tromp** (originally decided as **TrekTracker** 2026-04-19; renamed to **Tromp** on 2026-04-23 to free up a distinct brand. `applicationId` / `namespace` became `com.comtekglobal.tromp`; a set of internal identifiers (keystore alias, SQLite DB filename, notification channel ID, SharedPreferences file names, and the `TrekDatabase` class) were deliberately held at their original `trektracker*` values to preserve the upgrade path for existing sideloaded installs — see CHANGELOG [1.12].) |
 | 2 | Color palette | Outdoor earth-tones dark (forest green primary, warm amber accents, dark slate background) — see §2.1 for hex values |
 | 3 | Ascent hysteresis | Single **3 m** threshold in all modes |
 | 4 | Activity type in v1 | Single generic model with a type-label dropdown (Hike / Run / Bike / Walk / Other); all types tracked identically |

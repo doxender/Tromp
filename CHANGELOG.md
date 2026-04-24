@@ -1,6 +1,24 @@
 # Changelog
 
-All notable changes to TrekTracker are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
+All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
+
+## [1.12] — Unreleased
+
+Rename from TrekTracker to Tromp.
+
+### Changed
+- **App rename.** Display name `app_name` → `Tromp`; theme `Theme.TrekTracker` → `Theme.Tromp`; Gradle `rootProject.name` → `Tromp`; notification title / channel label → `Tromp`.
+- **Package restructure.** `namespace` + `applicationId` changed from `com.trektracker` to `com.comtekglobal.tromp`. Source trees moved from `app/src/{main,test}/java/com/trektracker/**` to `app/src/{main,test}/java/com/comtekglobal/tromp/**`; all `package` declarations and `import` lines rewritten to match. Class names containing `TrekTracker` updated to `Tromp`.
+- `versionCode` 12 → 13, `versionName` `1.11` → `1.12`.
+
+### Preserved deliberately (to keep existing installs upgradable without data loss)
+- **Release keystore + alias** (`app/release.keystore`, `keyAlias = "trektracker"`). Changing the signing key would mean no upgrade path for sideloaded APKs.
+- **SQLite database filename** (`trektracker.db` in `TrekDatabase.kt`). Renaming it would make every existing install appear to have no history.
+- **Notification channel ID** (`trektracker.tracking` in `TrackingNotifier.kt`). Changing it resets users' per-channel sound/vibration/importance preferences.
+- **SharedPreferences file names** (`trektracker.benchmark` in `BenchmarkSession.kt`, `trektracker.units` in `UnitPrefs.kt`). Renaming them orphans users' stored benchmarks and unit choice.
+- `TrekDatabase` **class name** (internal, not shown to users).
+
+These five identifiers are opaque to users and carry no brand surface; only the keystore-alias choice is load-bearing (the others would be cleanable given a one-time migration path, not done here).
 
 ## [1.11] — Unreleased
 

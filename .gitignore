@@ -9,3 +9,9 @@
 .cxx
 local.properties
 /app/build
+
+# Local Claude Code permissions (per-machine override; .claude/settings.json is the shared one)
+.claude/settings.local.json
+
+# Machine-specific Gradle daemon JVM config
+/gradle/gradle-daemon-jvm.properties

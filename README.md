@@ -1,6 +1,8 @@
-# TrekTracker
+# Tromp
 
-**Version 1.11** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+_(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The release keystore, SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data. See [CHANGELOG.md](CHANGELOG.md) and this section in the Decision Log for why.)_
+
+**Version 1.12** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
@@ -13,7 +15,7 @@ Includes a benchmarking function so live altitude can be read from the barometer
 Every push to this repo builds a signed release APK via GitHub Actions. Grab it one of two ways:
 
 - **Tagged release** (recommended for everyday use): open the [Releases page](../../releases) and download `app-release.apk` from the latest `v*` tag. Each tag push attaches an APK automatically.
-- **Latest build of any branch**: open the [Actions tab](../../actions), click the most recent successful run, and download the `trektracker-…` artifact (zip) from the bottom of the run page. Retained for 90 days.
+- **Latest build of any branch**: open the [Actions tab](../../actions), click the most recent successful run, and download the `tromp-…` artifact (zip) from the bottom of the run page. Retained for 90 days.
 
 Install on-device:
 
@@ -49,7 +51,7 @@ Install on-device:
 
 ## Architecture
 
-Single-module Android app, package root `com.trektracker`:
+Single-module Android app, package root `com.comtekglobal.tromp`:
 
 ```
 service/     TrackingService (foreground, location|dataSync) + TrackingNotifier

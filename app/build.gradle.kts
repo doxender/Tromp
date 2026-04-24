@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.trektracker"
+    namespace = "com.comtekglobal.tromp"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.trektracker"
+        applicationId = "com.comtekglobal.tromp"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.11"
+        versionCode = 13
+        versionName = "1.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -24,6 +24,10 @@ android {
     // rebuilds from source gets a byte-identical signed APK, which lets
     // updates install over existing installs without wiping data. Do NOT
     // reuse this keystore for anything you'd ship to Google Play.
+    //
+    // Note: keyAlias is historical ("trektracker") from before the 2026 rename
+    // to Tromp. Changing it would require regenerating the keystore, which
+    // would break the upgrade path for anyone running an older signed APK.
     signingConfigs {
         create("release") {
             storeFile = file("release.keystore")

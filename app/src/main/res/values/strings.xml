@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TrekTracker</string>
+    <string name="app_name">Tromp</string>
 
     <string name="action_start">START</string>
     <string name="action_stop">Stop</string>
@@ -70,9 +70,9 @@
     <string name="status_idle">Ready</string>
     <string name="status_searching_gps">Still searching for GPS…</string>
 
-    <string name="notif_channel_tracking">TrekTracker tracking</string>
+    <string name="notif_channel_tracking">Tromp tracking</string>
     <string name="notif_channel_tracking_desc">Ongoing notification shown while an activity is being recorded.</string>
-    <string name="notif_tracking_title">TrekTracker</string>
+    <string name="notif_tracking_title">Tromp</string>
     <string name="notif_tracking_body_idle">Recording…</string>
 
     <string name="osm_attribution">© OpenStreetMap contributors</string>
