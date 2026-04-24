@@ -19,6 +19,15 @@
     <string name="settings_title">Settings</string>
     <string name="settings_units">Units</string>
     <string name="settings_benchmarks">Manage benchmarks</string>
+    <string name="settings_safety">Safety &amp; disclaimer</string>
+    <string name="settings_licenses">Open source licenses</string>
+
+    <string name="disclaimer_title">Before you use Tromp</string>
+    <string name="disclaimer_body">Tromp is a recreational activity tracker. It is not for emergency, safety-of-life, or sole-means-of-navigation use.\n\n• Do not rely on Tromp as a substitute for a map and compass, a dedicated GPS unit, or proper route planning.\n• GPS position, elevation, and distance are approximations. Accuracy varies with sky view, weather, device, and battery state.\n• Continuous tracking drains the battery quickly. Carry backup power and a paper map in the backcountry.\n• You are responsible for your own safety, for knowing your limits, and for telling someone where you are going.\n\nTromp is provided "AS IS" with no warranty of any kind. By continuing you acknowledge that you use the app at your own risk.</string>
+    <string name="disclaimer_accept">I understand</string>
+    <string name="disclaimer_decline">Exit</string>
+    <string name="licenses_title">Open source licenses</string>
+
     <string name="settings_units_title">Units</string>
     <string name="units_imperial">Imperial (mi, ft)</string>
     <string name="units_metric">Metric (km, m)</string>
@@ -76,4 +85,7 @@
     <string name="notif_tracking_body_idle">Recording…</string>
 
     <string name="osm_attribution">© OpenStreetMap contributors</string>
+
+    <string name="legal_note_short">⚠ Tromp is a toy, not a lifeline. Carry a real map.</string>
+    <string name="legal_note_button">Full legal · fine print</string>
 </resources>

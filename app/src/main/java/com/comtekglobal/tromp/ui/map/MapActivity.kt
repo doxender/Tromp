@@ -3,12 +3,10 @@
 // This notice must be preserved in all derivative works.
 package com.comtekglobal.tromp.ui.map
 
-import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.comtekglobal.tromp.databinding.ActivityMapBinding
 import com.comtekglobal.tromp.tracking.TrackingSession
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -25,9 +23,9 @@ class MapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
-        Configuration.getInstance().load(this, prefs)
-        Configuration.getInstance().userAgentValue = packageName
+        // osmdroid configuration (including User-Agent) is set globally in
+        // TrompApplication.onCreate so it applies to every tile fetch, not
+        // just ones originating from this Activity.
 
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)

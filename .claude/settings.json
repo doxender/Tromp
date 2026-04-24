@@ -8,5 +8,18 @@
       "Bash(adb shell getprop *)",
       "Bash(adb logcat *)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /c/ComputerSource/Claude/hooks/tromp_publish_guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

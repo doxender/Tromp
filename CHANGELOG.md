@@ -6,6 +6,11 @@ All notable changes to **Tromp** (previously **TrekTracker**) are documented her
 
 Rename from TrekTracker to Tromp.
 
+### Added
+- **First-run safety disclaimer** (`util/SafetyDisclaimer`). Blocking dialog on first launch; re-viewable from Settings → "Safety & disclaimer". Acceptance is keyed to a version string so a material text change can force re-acknowledgement on next launch.
+- **Open source licenses screen** (`ui/licenses/LicensesActivity`) reachable from Settings → "Open source licenses". Renders `res/raw/oss_licenses.txt` — bundled dependency attributions (Apache 2.0 full text + per-project notices) plus OpenStreetMap / USGS 3DEP / Open-Elevation data-service attribution.
+- **README Legal section** covering safety, no-warranty, third-party attribution, trademarks, and privacy; top-of-file safety callout mirroring the in-app disclaimer.
+
 ### Changed
 - **App rename.** Display name `app_name` → `Tromp`; theme `Theme.TrekTracker` → `Theme.Tromp`; Gradle `rootProject.name` → `Tromp`; notification title / channel label → `Tromp`.
 - **Package restructure.** `namespace` + `applicationId` changed from `com.trektracker` to `com.comtekglobal.tromp`. Source trees moved from `app/src/{main,test}/java/com/trektracker/**` to `app/src/{main,test}/java/com/comtekglobal/tromp/**`; all `package` declarations and `import` lines rewritten to match. Class names containing `TrekTracker` updated to `Tromp`.
