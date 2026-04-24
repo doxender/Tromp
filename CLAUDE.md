@@ -18,11 +18,11 @@ Single-module Gradle (Kotlin DSL) Android app. Requires `local.properties` with 
 - Clean: `./gradlew clean`
 - Primary workflow is Android Studio (File → Open → this folder → Gradle sync). The Gradle wrapper script (`gradlew`) is not checked in.
 
-Toolchain: AGP 8.13.2, Kotlin 1.9.24, JVM target 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. ViewBinding enabled (generated `ActivityMainBinding` lives in `com.trektracker.databinding`). kapt is enabled for Room's annotation processor.
+Toolchain: AGP 8.13.2, Kotlin 1.9.24, JVM target 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. ViewBinding enabled (generated `ActivityMainBinding` lives in `com.comtekglobal.tromp.databinding`). KSP is enabled for Room's annotation processor.
 
 ## Architecture
 
-Package root: `com.trektracker`. Layout follows DESIGN.md §4.1:
+Package root: `com.comtekglobal.tromp`. Layout follows DESIGN.md §4.1:
 
 ```
 service/     TrackingService (foreground, location|dataSync) + TrackingNotifier
@@ -73,4 +73,4 @@ Crash recovery: service writes an active-session-id to SharedPreferences on star
 
 ## Design decisions already resolved
 
-See DESIGN.md §11 Decision Log. In short: name "TrekTracker"; outdoor earth-tones dark palette; single 3 m ascent hysteresis; generic activity model with a type-label dropdown; full stats scope (date-range + per-type + YoY + PRs + distance/week bar chart); default name `"{type} · YYYY-MM-DD HH:MM"`. If the user asks to revisit any of these, update the Decision Log table in DESIGN.md so the doc doesn't drift from reality.
+See DESIGN.md §11 Decision Log. In short: name "Tromp" (renamed from "TrekTracker" 2026-04-23; see CHANGELOG.md [1.12] for the list of internal identifiers kept at their `trektracker*` values so sideloaded installs stay upgradable); outdoor earth-tones dark palette; single 3 m ascent hysteresis; generic activity model with a type-label dropdown; full stats scope (date-range + per-type + YoY + PRs + distance/week bar chart); default name `"{type} · YYYY-MM-DD HH:MM"`. If the user asks to revisit any of these, update the Decision Log table in DESIGN.md so the doc doesn't drift from reality.

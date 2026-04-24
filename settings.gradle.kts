@@ -16,5 +16,5 @@ dependencyResolutionManagement {
         maven { url = uri("https://jitpack.io") } // MPAndroidChart
     }
 }
-rootProject.name = "TrekTracker"
+rootProject.name = "Tromp"
 include(":app")
