@@ -10,6 +10,8 @@ Includes a benchmarking function so live altitude can be read from the barometer
 
 `DESIGN.md` is the authoritative spec: requirements, color palette, user flows, Room schema, algorithms, and the Decision Log. Read it before making non-trivial changes.
 
+> ⚠️ **Safety notice — read before use.** Tromp is a recreational activity tracker. It is **not** for emergency, safety-of-life, or sole-means-of-navigation use, and is not a substitute for a map, compass, or dedicated GPS unit. GPS position, elevation, and distance are approximations; continuous tracking drains the battery quickly. Carry backup power and a paper map in the backcountry, know your limits, and tell someone where you are going. You use Tromp at your own risk. See [Legal](#legal) below for the full disclaimer.
+
 ## Installing
 
 Every push to this repo builds a signed release APK via GitHub Actions. Grab it one of two ways:
@@ -107,6 +109,40 @@ The app prompts for fine location + notifications on first Start; background loc
 - `CLAUDE.md` — guidance for Claude Code sessions working on this repo (build commands, conventions, scaffold status).
 - `.claude/settings.json` — project-scoped permission allowlist for read-only bash/adb commands.
 
-## License
+## Legal
 
-Copyright (c) 2026 Daniel V. Oxender. Released under the MIT License — see `LICENSE` for the full text. Any derivative work (fork, port, or modification) must preserve this copyright notice and the full license text.
+### Safety and fitness for purpose
+
+Tromp is provided for **recreational use only**. It is not designed, tested, or certified for emergency response, search-and-rescue, aviation, maritime navigation, commercial guiding, industrial tracking, medical monitoring, or any application where a failure or inaccuracy could result in injury, loss of life, or property damage. Do **not** rely on Tromp as your sole means of navigation, route-finding, or location reporting. Always carry a map and compass, plan your route independently, and tell someone where you are going.
+
+GPS fixes, elevation readings, distance totals, grade, and derived statistics are approximations. Their accuracy depends on sky view, atmospheric conditions, the device's sensor quality and calibration, remaining battery, and user behavior. Barometric altitude in particular is sensitive to weather changes and requires a correctly-acquired benchmark to be meaningful. The app makes no guarantee that any value it displays is correct.
+
+### No warranty, no liability
+
+Tromp is distributed "AS IS" and "AS AVAILABLE", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, title, accuracy, or non-infringement. To the maximum extent permitted by applicable law, neither the author nor any contributor shall be liable for any claim, damages, loss, or other liability — including direct, indirect, incidental, special, consequential, or punitive damages — arising from or in connection with Tromp, its use, or its inability to be used. See [`LICENSE`](LICENSE) for the full terms.
+
+Some jurisdictions do not allow the exclusion of certain warranties or the limitation of liability for personal injury caused by a defective product; in those jurisdictions the above limitations apply only to the extent permitted by law.
+
+### Third-party data and services
+
+When online, Tromp transmits your current coordinates to third-party services to retrieve elevation and map tiles:
+
+- **OpenStreetMap** — map tile imagery. Map data © OpenStreetMap contributors, licensed under the [Open Database License (ODbL)](https://www.openstreetmap.org/copyright). Tile requests are subject to the [OpenStreetMap Foundation Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/).
+- **USGS 3D Elevation Program (3DEP)** — primary elevation lookups. Public-domain data provided by the U.S. Geological Survey.
+- **Open-Elevation** — fallback elevation lookups when 3DEP is unavailable.
+
+Tromp has no affiliation with, endorsement from, or control over any of these services. Their availability, accuracy, and terms may change without notice. See the in-app **Settings → Open source licenses** screen for the full third-party notices and license texts for every bundled library.
+
+### Trademarks
+
+"Tromp"™ is an unregistered trademark of Daniel V. Oxender / Comtek Global. All other product names, logos, and brands referenced in this project are the property of their respective owners. Use of these names does not imply endorsement.
+
+### Privacy and data handling
+
+Tromp stores activity data (position, elevation, time, and any waypoints you record) on-device only, in the app's private storage. The developer does not operate a backend, does not collect telemetry, and does not receive your activity data. When the app is online, coordinates are sent to the third-party elevation and tile services listed above solely to retrieve elevation values and map imagery; those services see the request IP and the coordinates being queried. Uninstalling the app removes all locally stored data.
+
+A formal privacy policy will be published alongside any Google Play listing.
+
+### License
+
+Copyright (c) 2026 Daniel V. Oxender. Released under the MIT License — see [`LICENSE`](LICENSE) for the full text. Any derivative work (fork, port, or modification) must preserve this copyright notice and the full license text.

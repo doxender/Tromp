@@ -27,6 +27,7 @@
     <uses-feature android:name="android.hardware.sensor.barometer" android:required="false" />
 
     <application
+        android:name=".TrompApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -77,6 +78,12 @@
             android:name=".ui.benchmarks.BenchmarksActivity"
             android:exported="false"
             android:label="@string/benchmarks_title"
+            android:parentActivityName=".ui.main.MainActivity" />
+
+        <activity
+            android:name=".ui.licenses.LicensesActivity"
+            android:exported="false"
+            android:label="@string/licenses_title"
             android:parentActivityName=".ui.main.MainActivity" />
 
         <service

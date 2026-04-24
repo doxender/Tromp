@@ -29,10 +29,12 @@ import com.comtekglobal.tromp.ui.benchmark.BenchmarkActivity
 import com.comtekglobal.tromp.ui.benchmarks.BenchmarksActivity
 import com.comtekglobal.tromp.ui.calibration.CalibrationActivity
 import com.comtekglobal.tromp.ui.history.HistoryActivity
+import com.comtekglobal.tromp.ui.licenses.LicensesActivity
 import com.comtekglobal.tromp.ui.summary.SummaryActivity
 import com.comtekglobal.tromp.util.DebugLog
 import com.comtekglobal.tromp.util.DistanceUnit
 import com.comtekglobal.tromp.util.METERS_PER_FOOT
+import com.comtekglobal.tromp.util.SafetyDisclaimer
 import com.comtekglobal.tromp.util.UnitPrefs
 import com.comtekglobal.tromp.util.elevationUnit
 import com.comtekglobal.tromp.util.formatDistance
@@ -94,12 +96,19 @@ class MainActivity : AppCompatActivity() {
         DebugLog.init(this)
         BenchmarkSession.load(this)
 
+        if (!SafetyDisclaimer.hasAccepted(this)) {
+            SafetyDisclaimer.showBlocking(this) { /* nothing extra — user may now interact */ }
+        }
+
         binding.btnStart.setOnClickListener {
             if (isTracking) onStopClicked() else onStartClicked()
         }
         binding.btnSettings.setOnClickListener { showSettingsDialog() }
         binding.btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
+        }
+        binding.btnLegal.setOnClickListener {
+            SafetyDisclaimer.showInformational(this)
         }
 
         TrackingService.snapshots
@@ -291,6 +300,8 @@ class MainActivity : AppCompatActivity() {
         val items = arrayOf(
             getString(R.string.settings_units),
             getString(R.string.settings_benchmarks),
+            getString(R.string.settings_safety),
+            getString(R.string.settings_licenses),
         )
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_title)
@@ -298,6 +309,8 @@ class MainActivity : AppCompatActivity() {
                 when (which) {
                     0 -> showUnitsDialog()
                     1 -> startActivity(Intent(this, BenchmarksActivity::class.java))
+                    2 -> SafetyDisclaimer.showInformational(this)
+                    3 -> startActivity(Intent(this, LicensesActivity::class.java))
                 }
             }
             .show()
