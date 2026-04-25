@@ -1,6 +1,6 @@
 # Tromp
 
-_(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The release keystore, SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data. See [CHANGELOG.md](CHANGELOG.md) and this section in the Decision Log for why.)_
+_(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data; the release keystore was rotated to a fresh Tromp identity on 2026-04-24. See [CHANGELOG.md](CHANGELOG.md) and the Decision Log for why.)_
 
 **Version 1.12** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 

@@ -16,14 +16,16 @@ Rename from TrekTracker to Tromp.
 - **Package restructure.** `namespace` + `applicationId` changed from `com.trektracker` to `com.comtekglobal.tromp`. Source trees moved from `app/src/{main,test}/java/com/trektracker/**` to `app/src/{main,test}/java/com/comtekglobal/tromp/**`; all `package` declarations and `import` lines rewritten to match. Class names containing `TrekTracker` updated to `Tromp`.
 - `versionCode` 12 → 13, `versionName` `1.11` → `1.12`.
 
+### Rotated to Tromp identity
+- **Release keystore** rotated on 2026-04-24 to `CN=Tromp, alias=tromp, password=tromp2026`. Done while the install base was effectively one device, so the unavoidable break of the signing-key continuity (Android refuses to update an app signed by a different key) cost a single uninstall+reinstall. The pre-rotation keystore is archived at `app/release.keystore.trektracker.bak` and must never be reused — any APK signed with it cannot upgrade one signed with the current keystore.
+
 ### Preserved deliberately (to keep existing installs upgradable without data loss)
-- **Release keystore + alias** (`app/release.keystore`, `keyAlias = "trektracker"`). Changing the signing key would mean no upgrade path for sideloaded APKs.
 - **SQLite database filename** (`trektracker.db` in `TrekDatabase.kt`). Renaming it would make every existing install appear to have no history.
 - **Notification channel ID** (`trektracker.tracking` in `TrackingNotifier.kt`). Changing it resets users' per-channel sound/vibration/importance preferences.
 - **SharedPreferences file names** (`trektracker.benchmark` in `BenchmarkSession.kt`, `trektracker.units` in `UnitPrefs.kt`). Renaming them orphans users' stored benchmarks and unit choice.
 - `TrekDatabase` **class name** (internal, not shown to users).
 
-These five identifiers are opaque to users and carry no brand surface; only the keystore-alias choice is load-bearing (the others would be cleanable given a one-time migration path, not done here).
+These four identifiers are opaque to users and carry no brand surface; they would be cleanable given a one-time migration path, not done here. (The keystore alias was originally on this list but was rotated separately on 2026-04-24 — see "Rotated to Tromp identity" above.)
 
 ## [1.11] — Unreleased
 
