@@ -400,7 +400,7 @@ All initial open questions resolved 2026-04-19.
 
 | # | Question | Decision |
 |---|---|---|
-| 1 | App name | **Tromp** (originally decided as **TrekTracker** 2026-04-19; renamed to **Tromp** on 2026-04-23 to free up a distinct brand. `applicationId` / `namespace` became `com.comtekglobal.tromp`; a set of internal identifiers (keystore alias, SQLite DB filename, notification channel ID, SharedPreferences file names, and the `TrekDatabase` class) were deliberately held at their original `trektracker*` values to preserve the upgrade path for existing sideloaded installs — see CHANGELOG [1.12].) |
+| 1 | App name | **Tromp** (originally decided as **TrekTracker** 2026-04-19; renamed to **Tromp** on 2026-04-23 to free up a distinct brand. `applicationId` / `namespace` became `com.comtekglobal.tromp`; four internal identifiers (SQLite DB filename `trektracker.db`, notification channel ID `trektracker.tracking`, the two SharedPreferences file names, and the `TrekDatabase` class) were held at their `trektracker*` values to preserve the upgrade path for existing sideloaded installs. The release keystore was originally on that preserved list but was rotated to the Tromp identity on 2026-04-24 (CN=Tromp, alias=tromp) while the install base was effectively one device — see CHANGELOG [1.12].) |
 | 2 | Color palette | Outdoor earth-tones dark (forest green primary, warm amber accents, dark slate background) — see §2.1 for hex values |
 | 3 | Ascent hysteresis | Single **3 m** threshold in all modes |
 | 4 | Activity type in v1 | Single generic model with a type-label dropdown (Hike / Run / Bike / Walk / Other); all types tracked identically |
