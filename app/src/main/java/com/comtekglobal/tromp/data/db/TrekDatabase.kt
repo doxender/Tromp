@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OfflineRegionEntity::class,
         KnownLocationEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class TrekDatabase : RoomDatabase() {
@@ -84,6 +84,22 @@ abstract class TrekDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6: enriches `track_point` for offline track-segmentation analysis.
+         * Adds bearingDeg (nullable — `loc.bearing` isn't always reported),
+         * cumStepCount (session-relative step counter at this fix), and
+         * isAutoPaused (was AutoPauseDetector in PAUSED when this fix landed).
+         * Pre-migration rows have null/0/false in those columns — they predate
+         * the capture so there's no historical data to backfill.
+         */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE track_point ADD COLUMN bearingDeg REAL")
+                db.execSQL("ALTER TABLE track_point ADD COLUMN cumStepCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE track_point ADD COLUMN isAutoPaused INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): TrekDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -93,6 +109,7 @@ abstract class TrekDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                        MIGRATION_5_6,
                     )
                     .build()
                     .also { instance = it }

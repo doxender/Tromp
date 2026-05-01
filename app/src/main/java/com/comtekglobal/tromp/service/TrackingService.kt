@@ -16,9 +16,11 @@ import com.comtekglobal.tromp.location.LocationSource
 import com.comtekglobal.tromp.sensors.BarometerSource
 import com.comtekglobal.tromp.sensors.StepCounterSource
 import com.comtekglobal.tromp.tracking.AscentAccumulator
+import com.comtekglobal.tromp.tracking.AutoPauseDetector
 import com.comtekglobal.tromp.tracking.AutoStopDetector
 import com.comtekglobal.tromp.tracking.AutoStopTrimmer
 import com.comtekglobal.tromp.tracking.BenchmarkSession
+import com.comtekglobal.tromp.tracking.GradeCalculator
 import com.comtekglobal.tromp.tracking.TrackSnapshot
 import com.comtekglobal.tromp.tracking.TrackingSession
 import com.comtekglobal.tromp.util.DebugLog
@@ -40,10 +42,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Foreground service that owns the active tracking session. Subscribes to
- * LocationSource, feeds fixes through distance + ascent accumulators, and
- * emits a StateFlow<TrackSnapshot> for the UI. Track points are buffered in
- * TrackingSession for the summary + map screens. Room persistence is a
- * later pass.
+ * LocationSource + BarometerSource + StepCounterSource, runs each accepted
+ * fix through the distance / ascent / grade / auto-pause / auto-stop
+ * pipeline, and emits a StateFlow<TrackSnapshot> for the UI. On stop, the
+ * session is persisted to Room (`activity` + `track_point` tables).
  */
 class TrackingService : Service() {
 
@@ -66,6 +68,8 @@ class TrackingService : Service() {
     private var barometerJob: Job? = null
     private var stepCounterJob: Job? = null
     private val ascent = AscentAccumulator()
+    private val grade = GradeCalculator()
+    private val autoPause = AutoPauseDetector()
     private val autoStop = AutoStopDetector()
 
     private var startElapsedMs: Long = 0L
@@ -111,6 +115,8 @@ class TrackingService : Service() {
         val activityId = System.currentTimeMillis()
         TrackingSession.reset()
         ascent.reset()
+        grade.reset()
+        autoPause.reset()
         lastFixLat = null
         lastFixLon = null
         maxSpeedMps = 0.0
@@ -190,11 +196,24 @@ class TrackingService : Service() {
             return
         }
 
+        val speed = if (loc.hasSpeed()) loc.speed.toDouble() else 0.0
+        val nowMs = System.currentTimeMillis()
+
+        // DESIGN.md §6.4: feed every accepted fix into the auto-pause state
+        // machine. While PAUSED, downstream accumulators are skipped so a
+        // stopped user doesn't pile up phantom distance / ascent from GPS
+        // jitter. autoStop still runs — RETURNED_HOME explicitly wants the
+        // low-speed-near-start signal an auto-pause produces.
+        autoPause.onSample(nowMs, speed)
+        val autoPaused = autoPause.state == AutoPauseDetector.State.PAUSED
+
         val prevLat = lastFixLat
         val prevLon = lastFixLon
-        val addedDistance = if (prevLat != null && prevLon != null) {
+        val addedDistance = if (autoPaused || prevLat == null || prevLon == null) {
+            0.0
+        } else {
             haversineMeters(prevLat, prevLon, loc.latitude, loc.longitude)
-        } else 0.0
+        }
         lastFixLat = loc.latitude
         lastFixLon = loc.longitude
 
@@ -207,19 +226,32 @@ class TrackingService : Service() {
             SensorManager.getAltitude(qnh.toFloat(), pressure.toFloat()).toDouble()
         } else null
         val chosenAlt: Double? = baroAlt ?: gpsAlt
-        if (chosenAlt != null) ascent.add(chosenAlt)
+        if (!autoPaused && chosenAlt != null) ascent.add(chosenAlt)
 
-        val speed = if (loc.hasSpeed()) loc.speed.toDouble() else 0.0
-        if (speed > maxSpeedMps) maxSpeedMps = speed
+        if (!autoPaused && speed > maxSpeedMps) maxSpeedMps = speed
 
         val elapsed = android.os.SystemClock.elapsedRealtime() - startElapsedMs
         val totalDist = prev.totalDistanceM + addedDistance
         val avgSpeed = if (elapsed > 0) totalDist / (elapsed / 1000.0) else 0.0
 
+        // DESIGN.md §6.2: feed the rolling-window grade calculator with the
+        // running cumulative distance + chosen altitude. currentGradePct
+        // returns null until the window fills, which prevents early
+        // under-sampled max/min pollution.
+        val gradeReading: Double? = if (!autoPaused && chosenAlt != null) {
+            grade.add(totalDist, chosenAlt)
+            grade.currentGradePct()
+        } else null
+        val nextMaxGrade = if (gradeReading != null) {
+            maxOf(prev.maxGradePct, gradeReading)
+        } else prev.maxGradePct
+        val nextMinGrade = if (gradeReading != null) {
+            minOf(prev.minGradePct, gradeReading)
+        } else prev.minGradePct
+
         // Feed the auto-stop detector; latch the signal so the UI shows
         // exactly one prompt per trigger. The latch clears via
         // ACTION_DISMISS_AUTO_STOP (user said "Keep going") or via stop.
-        val nowMs = System.currentTimeMillis()
         val signal = autoStop.feed(
             AutoStopDetector.Sample(
                 tMs = nowMs,
@@ -235,12 +267,14 @@ class TrackingService : Service() {
         DebugLog.log(
             "FIX",
             ("lat=%.6f lon=%.6f spd=%.2f acc=%.1f alt=%.1f " +
+                "autoPaused=%s grade=%s " +
                 "mean=%.2f spikes=%d spikeArmed=%s " +
                 "leftHome=%s homeArmed=%s dist=%.1f dur=%ds " +
                 "signal=%s")
                 .format(
                     loc.latitude, loc.longitude, speed, loc.accuracy,
                     if (loc.hasAltitude()) loc.altitude else Double.NaN,
+                    autoPaused, gradeReading?.let { "%.1f".format(it) } ?: "-",
                     tel.trailingMeanMps, tel.consecutiveSpikes, tel.spikeArmed,
                     tel.leftHomeOnce, tel.homeArmed, tel.distFromStartM,
                     tel.durationMs / 1000L,
@@ -249,6 +283,7 @@ class TrackingService : Service() {
         )
 
         val next = prev.copy(
+            isAutoPaused = autoPaused,
             lat = loc.latitude,
             lon = loc.longitude,
             elevationM = chosenAlt ?: prev.elevationM,
@@ -257,6 +292,9 @@ class TrackingService : Service() {
             totalDistanceM = totalDist,
             totalAscentM = ascent.totalAscentM,
             totalDescentM = ascent.totalDescentM,
+            currentGradePct = gradeReading,
+            maxGradePct = nextMaxGrade,
+            minGradePct = nextMinGrade,
             avgSpeedMps = avgSpeed,
             maxSpeedMps = maxSpeedMps,
             elapsedMs = elapsed,
@@ -276,6 +314,10 @@ class TrackingService : Service() {
                 gpsElevM = gpsAlt,
                 pressureHpa = pressure,
                 horizAccM = loc.accuracy,
+                speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                bearingDeg = if (loc.hasBearing()) loc.bearing else null,
+                cumStepCount = sessionStepCount,
+                isAutoPaused = autoPaused,
                 tMs = System.currentTimeMillis(),
             )
         )
@@ -286,7 +328,14 @@ class TrackingService : Service() {
         val prev = _snapshots.value ?: return
         if (prev.isPaused) return
         val elapsed = android.os.SystemClock.elapsedRealtime() - startElapsedMs
-        val next = prev.copy(elapsedMs = elapsed)
+        // movingMs advances at 1 s resolution while the user is neither
+        // manually paused nor auto-paused. Manual pause already short-circuits
+        // above; auto-pause is decided by AutoPauseDetector via location fixes.
+        val movingDelta = if (prev.isAutoPaused) 0L else 1000L
+        val next = prev.copy(
+            elapsedMs = elapsed,
+            movingMs = prev.movingMs + movingDelta,
+        )
         _snapshots.value = next
         TrackingSession.lastSnapshot = next
         refreshNotification(next)
@@ -389,7 +438,10 @@ class TrackingService : Service() {
                 gpsAltM = p.gpsElevM ?: 0.0,
                 pressureHpa = p.pressureHpa,
                 horizAccM = p.horizAccM,
-                speedMps = 0f,
+                speedMps = p.speedMps,
+                bearingDeg = p.bearingDeg,
+                cumStepCount = p.cumStepCount,
+                isAutoPaused = p.isAutoPaused,
             )
         }
         scope.launch {

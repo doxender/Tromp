@@ -2,7 +2,7 @@
 
 _(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data; the release keystore was rotated to a fresh Tromp identity on 2026-04-24. See [CHANGELOG.md](CHANGELOG.md) and the Decision Log for why.)_
 
-**Version 1.12** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**Version 1.14** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
@@ -37,6 +37,7 @@ Install on-device:
 - **Record an activity** — foreground-service tracking via `FusedLocationProviderClient`. Distance via haversine, ascent/descent via the 3 m-hysteresis accumulator from DESIGN.md §6.1. Live duration + totals on the main screen and in the ongoing notification.
 - **Stop + Summary** — final totals (duration, distance, ascent/descent, avg/max speed, point count) with a button to view the track on an OpenStreetMap polyline (osmdroid).
 - **History** — every completed activity is persisted to Room (`activity` + `track_point` tables). Main-screen clock icon opens a list with an all-time totals header. Tap an entry to reopen its Summary + Map.
+- **CSV export** — the Summary screen has an Export CSV button that writes the enriched per-point capture (lat/lon/alt, speed, bearing, cumulative step count, auto-pause flag, plus neighbor deltas) to `Android/data/com.comtekglobal.tromp/files/exports/tromp-<activityId>.csv` and opens the share sheet. Diagnostic feature — pulled into Excel so the eventual hike-vs-puttering classifier can be tuned against real recordings before deciding what the rule should look like.
 
 ### Pure-logic core (unit-tested)
 
@@ -44,12 +45,12 @@ Install on-device:
 
 ### Not yet built
 
-- Live tracking screen with large metrics tiles, pause/resume, waypoint drop.
+- Live tracking screen with large metrics tiles, manual pause/resume, waypoint drop. (Auto-pause is wired and freezes distance/ascent/grade automatically; manual pause still requires the action from the foreground notification.)
 - Ribbon fallback view + offline tile manager.
 - Activity detail with elevation profile chart (MPAndroidChart).
 - Full stats dashboard — date-range tiles, per-type breakdowns, YoY, personal records, distance-per-week bar chart. The Room aggregate queries (`aggregateBetween`, `aggregateByTypeBetween`) already exist to back these.
 - Crash-recovery dialog, settings UI, GPX export wired to the UI.
-- Auto start/stop — automatic session start/stop based on detected motion (distinct from auto-pause, which only gates an in-progress session).
+- Auto start — automatic session start based on detected motion (auto-stop is shipped; auto-pause is shipped; auto-start is the missing third).
 
 ## Architecture
 

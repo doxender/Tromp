@@ -132,6 +132,10 @@ class HistoryActivity : AppCompatActivity() {
                         gpsElevM = it.gpsAltM,
                         pressureHpa = it.pressureHpa,
                         horizAccM = it.horizAccM,
+                        speedMps = it.speedMps,
+                        bearingDeg = it.bearingDeg,
+                        cumStepCount = it.cumStepCount,
+                        isAutoPaused = it.isAutoPaused,
                         tMs = it.time,
                     )
                 )

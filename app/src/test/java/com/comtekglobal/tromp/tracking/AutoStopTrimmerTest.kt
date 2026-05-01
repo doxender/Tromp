@@ -15,6 +15,10 @@ class AutoStopTrimmerTest {
             elevM = elev, gpsElevM = elev,
             pressureHpa = null,
             horizAccM = 0f,
+            speedMps = 0f,
+            bearingDeg = null,
+            cumStepCount = 0,
+            isAutoPaused = false,
             tMs = tMs,
         )
 
