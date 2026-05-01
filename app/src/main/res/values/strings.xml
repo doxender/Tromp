@@ -68,6 +68,12 @@
     <string name="summary_title">Activity Summary</string>
     <string name="summary_view_map">View Map</string>
     <string name="summary_done">Done</string>
+    <string name="summary_export_csv">Export CSV</string>
+    <string name="summary_export_csv_subject">Tromp activity export</string>
+    <string name="summary_export_csv_chooser">Share CSV</string>
+    <string name="summary_export_csv_saved">Saved %1$s</string>
+    <string name="summary_export_csv_failed">Export failed: %1$s</string>
+    <string name="summary_export_csv_no_data">No track data to export.</string>
 
     <string name="map_title">Track Map</string>
     <string name="map_back">Back</string>

@@ -314,6 +314,10 @@ class TrackingService : Service() {
                 gpsElevM = gpsAlt,
                 pressureHpa = pressure,
                 horizAccM = loc.accuracy,
+                speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                bearingDeg = if (loc.hasBearing()) loc.bearing else null,
+                cumStepCount = sessionStepCount,
+                isAutoPaused = autoPaused,
                 tMs = System.currentTimeMillis(),
             )
         )
@@ -434,7 +438,10 @@ class TrackingService : Service() {
                 gpsAltM = p.gpsElevM ?: 0.0,
                 pressureHpa = p.pressureHpa,
                 horizAccM = p.horizAccM,
-                speedMps = 0f,
+                speedMps = p.speedMps,
+                bearingDeg = p.bearingDeg,
+                cumStepCount = p.cumStepCount,
+                isAutoPaused = p.isAutoPaused,
             )
         }
         scope.launch {

@@ -47,6 +47,12 @@ data class TrackPointEntity(
     val pressureHpa: Double?,
     val horizAccM: Float,
     val speedMps: Float,
+    // v6: enriched per-point capture for offline track segmentation analysis.
+    // Persisted so a recorded activity can be exported as CSV and inspected in
+    // Excel — see export/CsvWriter. Heavier than strictly needed for live UI.
+    val bearingDeg: Float? = null,        // loc.bearing if available
+    val cumStepCount: Int = 0,            // session-relative step count at this fix
+    val isAutoPaused: Boolean = false,    // AutoPauseDetector state when this fix was recorded
 )
 
 @Entity(

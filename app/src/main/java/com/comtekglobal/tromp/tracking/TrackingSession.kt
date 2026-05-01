@@ -19,6 +19,10 @@ object TrackingSession {
         val gpsElevM: Double?,       // raw GPS altitude, preserved for comparison
         val pressureHpa: Double?,    // barometer reading at this fix, if any
         val horizAccM: Float,        // GPS horizontal accuracy reported for this fix
+        val speedMps: Float,         // loc.speed (0f if hasSpeed() == false)
+        val bearingDeg: Float?,      // loc.bearing (null if hasBearing() == false)
+        val cumStepCount: Int,       // session-relative step counter at this fix
+        val isAutoPaused: Boolean,   // AutoPauseDetector state at this fix
         val tMs: Long,
     )
 

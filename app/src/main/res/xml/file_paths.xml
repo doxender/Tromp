@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!--
+      Exposes the app's external-files-dir/exports/ subdirectory through
+      androidx.core.content.FileProvider so CSV exports can be shared via
+      Intent.ACTION_SEND (email, Drive, etc.) without raw file:// URIs.
+      Path is also reachable via the device's Files app under
+      Android/data/com.comtekglobal.tromp/files/exports/ for adb pull.
+    -->
+    <external-files-path name="exports" path="exports/" />
+</paths>

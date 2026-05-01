@@ -8,7 +8,7 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 
 ## Snapshot (2026-05-01)
 
-- **Branch / version:** working on `wire-grade-and-autopause` off `master`. `versionName 1.13` / `versionCode 14`. Latest master commit `cfb529f` (keystore rotation merge).
+- **Branch / version:** working on `wire-grade-and-autopause` off `master`. `versionName 1.14` / `versionCode 15`. Latest master commit `cfb529f` (keystore rotation merge).
 - **Active branches still around:** `keystore-rotation`, `legal-and-maps`, `rename-tromp` — all merged into master, leftover. Safe to delete locally if Dan wants tidiness; doesn't affect CI.
 - **`applicationId` / `namespace`:** `com.comtekglobal.tromp`. Source root `app/src/main/java/com/comtekglobal/tromp/`.
 - **Toolchain:** AGP 8.13.2, Kotlin 1.9.24, JVM 17, KSP for Room (kapt was removed in 1.8 — see CHANGELOG). Room 2.7.2 at schema **v5** (`app/schemas/com.comtekglobal.tromp.data.db.TrekDatabase/` is the exported source of truth for migrations).
@@ -41,6 +41,68 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 ## Pre-publication checklist
 
 This is a personal sideload. The "Tromp pre-publication checklist" in Dan's auto-memory tracks blockers before any Play Store submission. Tromp has a sideload exemption — don't surface those items unless the trigger is Play / public release / tag. (Tags currently do attach an APK to a GitHub Release, but that's still personal sideload distribution, not public Play release.)
+
+## Pending discussion — track segmentation / smart trimming (2026-05-01)
+
+Dan reported three real-world problems on a hike-from-home session, then proposed a generalized fix. Decision deferred — Dan was tired and asked to write it up. Pick this back up next session.
+
+### What Dan reported
+
+1. **Trailing puttering.** Walked home from hike, walked around yard, sat down — auto-stop never fired and the puttering ended up in the recorded hike.
+2. **Leading puttering.** Tapped START + benchmark, puttered around the house before actually starting to hike — the puttering counted as part of the hike.
+3. **Mid-hike short stop.** Stopped ~1 min for the dog to pee — that segment wasn't eliminated.
+
+### What v1.13 (this session) actually fixes
+
+| Problem | v1.13 status |
+|---|---|
+| #1 trailing puttering at home | Not addressed |
+| #2 leading puttering before hike start | Not addressed (auto-start doesn't exist) |
+| #3 mid-hike short stops inflating totals | **Fixed** (auto-pause now wired — totals freeze after 30 s of < 0.5 m/s) |
+| #3 short stops still visible on map polyline | Not addressed (track points still appended during auto-pause) |
+
+Auto-stop's `RETURNED_HOME` rule is the source of #1's failure: it requires `speed ≤ 1.0 m/s AND dist-from-start ≤ 100 m` on a single fix. Walking around the yard at ~1.4 m/s never satisfies; even when it does fire, the trim point is "moment of re-entry at low speed," not "moment hiking ended." Auto-START doesn't exist at all (README "Not yet built" calls it the missing third of the auto-trio).
+
+### Dan's idea: post-hoc track segmentation
+
+Use richer per-point data + a classifier over sliding windows to identify hiking vs. puttering vs. still vs. driving segments, then trim non-hiking spans at session-stop. Lookahead lets the rule see what real-time auto-pause/auto-stop can't.
+
+**What's needed on disk** (currently lost):
+- `speedMps` per point — `loc.speed` is available, written to Room as `0f` today.
+- `bearingDeg` per point — `loc.bearing`, never captured.
+- Step delta per point — sample `sessionStepCount` on each fix, diff vs. previous; new column.
+
+**Signals + ranges**:
+| Signal | Hiking | Puttering | Standing | Driving |
+|---|---|---|---|---|
+| Stride (dist / steps) | 0.5–1.5 m | 0.2–0.5 m | ~0 | huge / no steps |
+| Sinuosity (path len / net disp) over 60 s | 1.0–1.3 | 3+ | undefined | ~1 |
+| Speed | 0.7–2 m/s | 0.3–1 m/s | < 0.3 m/s | > 4 m/s |
+
+Stride length is the strongest single discriminator.
+
+### Critical constraint Dan added: rocky scrambles
+
+His trails include 20-foot loose-rock clambers where he zigzags carefully and slows way down to avoid falling. Short-window signals will look identical to puttering: slow, short stride, high bearing variance.
+
+**Rule must use long windows + elevation/displacement:**
+- Net displacement over a longer window (3–5 min) — a real scramble nets meaningful linear progress; puttering at home does not.
+- Elevation change — scrambles gain or lose altitude; puttering at home is flat.
+- Don't use short-window sinuosity alone; it will false-positive on legitimate hard terrain.
+
+Probably: classify a segment as non-hiking only when **multiple** signals agree (low stride + low long-window net-displacement + low elevation change). One signal alone is not enough.
+
+### Suggested two-PR shape
+
+1. ~~**Enrich capture.**~~ **Done in v1.14.** `TrackingSession.Point` + `TrackPointEntity` now record per-fix `speedMps` (was always 0), `bearingDeg`, `cumStepCount`, `isAutoPaused`. Room migration v5 → v6. CSV export from the Summary screen writes the enriched track plus computed neighbor deltas (distance, time, bearing change, step delta, stride) for offline analysis in Excel.
+
+2. **`TrackPostProcessor`** — pure-logic classifier (unit-testable like `AutoStopTrimmer`). Takes `List<Point>` → returns segments tagged hiking / puttering / still / driving. Initially run at stop: drop leading/trailing non-hiking, recompute totals via the same shape `AutoStopTrimmer` already uses. Mid-track puttering: probably keep on map, exclude from totals. Iterate via synthetic fix-stream tests so we don't need on-device walks every revision. Tuning waits until real CSVs are in hand.
+
+### Open questions for next session
+
+- Should mid-track puttering be dropped from the polyline too, or kept-but-not-counted? (Dan likely cares more about clean totals than clean polyline.)
+- Where does the user override live? Sometimes a "puttering" segment is a real lunch break the user wants kept.
+- Auto-start: is it a separate piece of work, or does the classifier subsume it (run at stop, the classifier trims leading puttering anyway)? Probably the latter — classifier eats both the leading and trailing problem at once.
 
 ## Update protocol
 

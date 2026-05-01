@@ -36,7 +36,7 @@ ui/main/     MainActivity — idle landing screen
 util/        Haversine, Units, Time
 ```
 
-### Implementation state (2026-05-01, v1.13)
+### Implementation state (2026-05-01, v1.14)
 
 For per-version detail see `CHANGELOG.md`; for current gotchas + state at-a-glance see `CONTEXT.md`. Brief tour:
 

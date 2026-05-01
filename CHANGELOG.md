@@ -2,6 +2,23 @@
 
 All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.14] — Unreleased
+
+Work on branch `wire-grade-and-autopause` — enriched per-point capture + CSV export, pre-work for the eventual hike-vs-puttering classifier (see CONTEXT.md "Pending discussion — track segmentation"). Diagnostic feature: the captured columns are heavier than strictly needed for live UI, but they're necessary to tune the segmenter against real recordings before deciding what the rule should look like.
+
+### Added
+- **Enriched per-point capture.** `TrackingSession.Point` and `TrackPointEntity` now record per-fix `speedMps` (was always written `0f`), `bearingDeg` (`loc.bearing` if available), `cumStepCount` (session-relative step counter at the fix), and `isAutoPaused` (whether `AutoPauseDetector` was in PAUSED at fix time). Pre-1.14 activities have null/0/false in the new columns since the data didn't exist when they were recorded.
+- **CSV export from the Summary screen.** New `export/CsvWriter` writes the enriched track plus computed neighbor deltas (distance, time, bearing change, step delta, stride) and an activity-summary header banner. Files land in `Android/data/com.comtekglobal.tromp/files/exports/tromp-<activityId>.csv` and the share sheet opens immediately so the user can email or Drive the file out for analysis in Excel.
+- **`androidx.core.content.FileProvider`** under authority `${applicationId}.fileprovider` exposes the exports directory for `ACTION_SEND` without raw `file://` URIs (Android 7+ requirement). Path declaration in `res/xml/file_paths.xml`.
+
+### Schema
+- Room **v5 → v6**: adds `bearingDeg REAL`, `cumStepCount INTEGER NOT NULL DEFAULT 0`, `isAutoPaused INTEGER NOT NULL DEFAULT 0` to `track_point`. No backfill — pre-existing rows predate the capture.
+
+### Changed
+- `versionCode` 14 → 15, `versionName` `1.13` → `1.14`.
+- `TrackingService.persistActivity` now passes `speedMps`, `bearingDeg`, `cumStepCount`, `isAutoPaused` through to the persisted entity instead of dropping them on the floor.
+- `HistoryActivity.openActivity` populates the new `Point` fields from Room when reopening an activity, so the round-trip is lossless.
+
 ## [1.13] — Unreleased
 
 Work on branch `wire-grade-and-autopause` — connect already-tested pure-logic modules to the live pipeline that had been writing zero-valued grade and never advancing moving time.
