@@ -36,23 +36,22 @@ ui/main/     MainActivity — idle landing screen
 util/        Haversine, Units, Time
 ```
 
-### Scaffold state (2026-04-19)
+### Implementation state (2026-05-01, v1.13)
 
-**Fully implemented + unit-tested** (all pure Kotlin, no Android framework deps):
-`GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `QnhCalibrator`, `Haversine`, `Units`, `GpxWriter`. If you change their behavior, update the tests. These are the failure-prone pieces of the app; keep the unit tests passing as the first line of defense.
+For per-version detail see `CHANGELOG.md`; for current gotchas + state at-a-glance see `CONTEXT.md`. Brief tour:
 
-**Implemented, not yet wired**: `DemClient` (callers must dispatch to `Dispatchers.IO`), `LocationSource`, `BarometerSource`, all Room entities + DAOs + `TrekDatabase`.
+**Pure-logic core, all unit-tested**: `GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `AutoStopDetector`, `AutoStopTrimmer`, `QnhCalibrator`, `Haversine`, `Units`, `GpxWriter`. If you change their behavior, update the tests — they encode the subtle invariants and are the first line of defense.
 
-**Skeleton only — do not treat as complete**:
-- `TrackingService` owns the foreground-service lifecycle, builds the low-importance ongoing notification, and runs a 1 Hz ticker that advances `elapsedMs` so the snapshot `StateFlow` emits something. It does **not** yet collect from `LocationSource`/`BarometerSource`, drive the grade/ascent/auto-pause pipeline, or flush to Room. Wiring that pipeline is the next major implementation step.
-- `MainActivity` is the idle landing screen: START, Acquire Benchmark, Calibrate Barometer, gear, history. Only START has behavior (launches the service); the other four buttons show a `Toast "pending implementation"`.
+**Wired into the live pipeline**: `TrackingService` collects from `LocationSource` + `BarometerSource` + `StepCounterSource`, runs each accepted fix through accuracy filter → distance (Haversine) → ascent (`AscentAccumulator`) → grade (`GradeCalculator`) → auto-pause (`AutoPauseDetector`) → auto-stop (`AutoStopDetector`), emits `TrackSnapshot` via `StateFlow`, and on stop persists `ActivityEntity` + `TrackPointEntity` to Room. The 1 Hz ticker advances `elapsedMs` always and `movingMs` while not paused / auto-paused.
 
-**Not present at all** (all specced in DESIGN.md; expected in later passes):
-- Live tracking screen, map view (osmdroid), ribbon fallback view, offline tile manager.
-- Activity detail screen, elevation profile chart (MPAndroidChart dependency declared), stats dashboard, settings UI.
-- Benchmark acquisition flow and calibration flow UIs.
-- Crash-recovery dialog on launch.
-- History list.
+**UI shipped**: `MainActivity` (idle + live status + auto-stop dialog + settings dialog), `BenchmarkActivity`, `CalibrationActivity`, `SummaryActivity`, `MapActivity` (osmdroid polyline), `HistoryActivity` (list with rename/delete), `BenchmarksActivity` (cache management), `LicensesActivity`. First-run safety disclaimer (`SafetyDisclaimer`) blocks until accepted.
+
+**Not yet built** (canonical list lives in `README.md` "Not yet built"):
+- Dedicated live tracking screen (large metrics tiles, manual pause/resume button, waypoint drop) — main screen doubles as the live view for now.
+- Ribbon fallback view + offline tile manager.
+- Activity detail w/ elevation profile chart (MPAndroidChart dep declared, unused).
+- Stats dashboard (DAOs ready: `aggregateBetween`, `aggregateByTypeBetween`).
+- Crash-recovery dialog, GPX export wired to UI, auto-start (third of the auto-trio after auto-pause + auto-stop).
 
 ### Runtime shape (target end state — §4.2 of DESIGN.md)
 

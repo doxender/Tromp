@@ -19,7 +19,8 @@ import com.comtekglobal.tromp.util.formatSpeed
 
 /**
  * Post-activity summary: totals + a link to the map. Reads from the in-memory
- * TrackingSession — persistence to Room is a later pass.
+ * TrackingSession (which TrackingService populates while recording, and which
+ * HistoryActivity re-populates from Room when reopening a past activity).
  */
 class SummaryActivity : AppCompatActivity() {
 

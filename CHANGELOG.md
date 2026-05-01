@@ -2,6 +2,22 @@
 
 All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.13] — Unreleased
+
+Work on branch `wire-grade-and-autopause` — connect already-tested pure-logic modules to the live pipeline that had been writing zero-valued grade and never advancing moving time.
+
+### Added
+- **Live grade in the snapshot.** `TrackingService` now feeds each accepted fix's `(cumulativeDistanceM, chosenAltitudeM)` into a `GradeCalculator` and publishes `currentGradePct` on every `TrackSnapshot`. `maxGradePct` / `minGradePct` advance from real readings instead of the `±Infinity` sentinels, so persisted activities now carry meaningful steepest-climb / steepest-descent figures (previously written as `0.0`).
+- **Auto-pause integrated.** Each fix is fed to `AutoPauseDetector`. When the state machine flips to `PAUSED` (DESIGN.md §6.4: speed < 0.5 m/s for 30 s continuous), the snapshot's `isAutoPaused` flag flips and the rest of the fix pipeline (distance, ascent/descent, grade, max-speed) is short-circuited so a stationary user doesn't accumulate phantom totals from GPS jitter. `auto-stop` continues to run during auto-pause — `RETURNED_HOME` explicitly wants the low-speed-near-start signal an auto-pause produces.
+- **Moving time accumulation.** The 1 Hz ticker now advances `TrackSnapshot.movingMs` while the session is neither manually paused (existing behavior) nor auto-paused (new). `ActivityEntity.movingMs` is now a real value rather than always-zero; future stats can compute "moving avg speed" and "%time stopped" off it.
+
+### Changed
+- Stale comments removed from `TrackingService.kt` (file header), `TrackingSession.kt`, and `SummaryActivity.kt` — all three claimed Room persistence was "a later pass" / "pending", but it has been wired since v1.0.
+- `versionCode` 13 → 14, `versionName` `1.12` → `1.13`.
+
+### Notes
+- `TrackPointEntity.speedMps` is still always written as `0f` (the persist path doesn't pass through `loc.speed`). Left for a future pass since no current screen reads per-point speed; mentioned here so future work doesn't think it's authoritative.
+
 ## [1.12] — Unreleased
 
 Rename from TrekTracker to Tromp.

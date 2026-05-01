@@ -6,7 +6,9 @@ package com.comtekglobal.tromp.tracking
 /**
  * In-memory buffer of the fixes recorded during the current (or most recent)
  * tracking session and the final snapshot emitted by TrackingService on stop.
- * Summary + Map screens read from here. Not persisted — Room hookup pending.
+ * Live + Summary + Map screens read from here for low-latency rendering;
+ * persistence happens in parallel via TrackingService.persistActivity, and
+ * History opens past activities by re-populating this object from Room.
  */
 object TrackingSession {
 
