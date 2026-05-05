@@ -78,10 +78,11 @@ object CsvWriter {
                 "lat", "lon", "alt_m", "gps_alt_m",
                 "pressure_hpa", "horiz_acc_m",
                 "speed_mps", "bearing_deg",
-                "cum_step_count", "is_auto_paused",
+                "step_count", "is_auto_paused",
                 "dist_from_prev_m", "dt_from_prev_s",
-                "bearing_change_deg", "steps_from_prev",
-                "stride_m_per_step",
+                "bearing_change_deg", "steps_delta",
+                "stride_m_per_step", "cadence_spm",
+                "vertical_rate_mps",
             ).joinToString(",")
         )
         out.write("\n")
@@ -94,6 +95,20 @@ object CsvWriter {
             val dSteps = prev?.let { p.cumStepCount - it.cumStepCount }
             val stride = if (dSteps != null && dSteps > 0 && dist != null && dist > 0) {
                 dist / dSteps
+            } else null
+            // cadence_spm = steps_delta / dt * 60. Only meaningful when dt > 0
+            // and we have a previous fix to diff against. While auto-paused the
+            // step counter doesn't advance so cadence naturally evaluates to 0,
+            // which is the right answer.
+            val cadenceSpm = if (dSteps != null && dtSec != null && dtSec > 0) {
+                dSteps / dtSec * 60.0
+            } else null
+            // vertical_rate_mps = Δalt / dt. Sign carries direction (positive =
+            // climbing, negative = descending). altM is the chosen altitude
+            // (baro-when-calibrated, GPS otherwise) so this matches what the
+            // ascent accumulator sees.
+            val vrate = if (dtSec != null && dtSec > 0) {
+                (p.altM - (prev?.altM ?: p.altM)) / dtSec
             } else null
 
             out.write(
@@ -117,6 +132,8 @@ object CsvWriter {
                     dBear?.let { "%.1f".format(Locale.US, it) } ?: "",
                     dSteps?.toString() ?: "",
                     stride?.let { "%.3f".format(Locale.US, it) } ?: "",
+                    cadenceSpm?.let { "%.1f".format(Locale.US, it) } ?: "",
+                    vrate?.let { "%.3f".format(Locale.US, it) } ?: "",
                 ).joinToString(",")
             )
             out.write("\n")

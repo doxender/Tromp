@@ -2,6 +2,32 @@
 
 All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.14.2] — Unreleased
+
+CSV export enrichment for the segmenter-tuning workflow. Saves having to type formulas in Excel for the two derived rates Dan was already eyeballing by hand.
+
+### Added
+- **`cadence_spm` column** — steps per minute, computed as `steps_delta / dt_from_prev_s * 60`. Blank when there's no previous fix or `dt = 0`. During auto-pause the step counter doesn't advance, so cadence naturally falls to 0 — that's the right answer.
+- **`vertical_rate_mps` column** — vertical speed (m/s), computed as `(alt_curr − alt_prev) / dt_from_prev_s`. Sign carries direction (positive = climbing). Uses the chosen altitude (`altM` — barometric when QNH is calibrated, GPS otherwise), so it matches what `AscentAccumulator` sees.
+
+### Changed
+- **Renamed two existing CSV columns** for clearer Excel column headers: `cum_step_count` → `step_count`, `steps_from_prev` → `steps_delta`.
+- `recover_track_from_log.py` updated to mirror the new column shape so a recovered-from-log CSV and a natively-exported CSV are interchangeable in Excel. Columns the log doesn't carry (pressure, bearing, GPS-vs-baro alt split, step counts and everything derived from them) are emitted blank rather than dropped.
+- `versionCode` 16 → 17, `versionName` `1.14.1` → `1.14.2`.
+
+## [1.14.1] — Unreleased
+
+Hot-fix for a data-loss race in the v1.14 stop path. Symptom: an activity recorded fine, the History list showed it with correct totals, but the Summary screen's "View Map" and "Export CSV" buttons were both inert. Root cause: `TrackingService.persistActivity` dispatched the two DB writes (activity row + track-point batch) to the service's `CoroutineScope` and then `onStartCommand` immediately called `stopSelf()`, which schedules `onDestroy() → scope.cancel()`. Cancellation could land between `db.activities().upsert(...)` and `db.trackPoints().insertAll(...)`, persisting the activity row but losing every point. With zero `track_point` rows for the activity, `SummaryActivity.btnMap.isEnabled = points.size >= 2` and `btnExportCsv.isEnabled = points.isNotEmpty()` both evaluated false, so the buttons silently did nothing.
+
+### Fixed
+- **Persist now runs synchronously and atomically.** `TrackingService.persistActivity` switched from `scope.launch { upsert; insertAll }` to `runBlocking { db.withTransaction { upsert; insertAll } }`. The transaction guarantees both writes land or neither does (no more half-persisted activities), and `runBlocking` finishes before `onStartCommand` returns to call `stopSelf()`, so the persist can no longer be cut off by `scope.cancel()`. Brief main-thread block on stop is acceptable — Room's WAL batch insert for thousands of points is tens of ms, far cheaper than losing the track.
+
+### Recovery
+- Lost tracks from prior 1.14 sessions are partially recoverable from `Android/data/com.comtekglobal.tromp/files/autostop.log` — every accepted location fix was logged with lat/lon/speed/accuracy/altitude, so the most recent session (within the log's 2 MB rolling cap) can be reconstructed into GPX/CSV. Tracks that aged out of the log before this fix landed are unrecoverable.
+
+### Changed
+- `versionCode` 15 → 16, `versionName` `1.14` → `1.14.1`.
+
 ## [1.14] — Unreleased
 
 Work on branch `wire-grade-and-autopause` — enriched per-point capture + CSV export, pre-work for the eventual hike-vs-puttering classifier (see CONTEXT.md "Pending discussion — track segmentation"). Diagnostic feature: the captured columns are heavier than strictly needed for live UI, but they're necessary to tune the segmenter against real recordings before deciding what the rule should look like.

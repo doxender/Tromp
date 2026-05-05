@@ -23,6 +23,7 @@ import com.comtekglobal.tromp.tracking.BenchmarkSession
 import com.comtekglobal.tromp.tracking.GradeCalculator
 import com.comtekglobal.tromp.tracking.TrackSnapshot
 import com.comtekglobal.tromp.tracking.TrackingSession
+import androidx.room.withTransaction
 import com.comtekglobal.tromp.util.DebugLog
 import com.comtekglobal.tromp.util.defaultActivityName
 import com.comtekglobal.tromp.util.formatDuration
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Foreground service that owns the active tracking session. Subscribes to
@@ -444,9 +446,24 @@ class TrackingService : Service() {
                 isAutoPaused = p.isAutoPaused,
             )
         }
-        scope.launch {
-            db.activities().upsert(entity)
-            if (pointRows.isNotEmpty()) db.trackPoints().insertAll(pointRows)
+        // Persist synchronously: stopTracking is called from onStartCommand
+        // (main thread) and is followed immediately by stopSelf() → onDestroy()
+        // → scope.cancel(). A `scope.launch { ... }` here races that
+        // cancellation; in v1.14 and earlier, cancellation could land between
+        // activities().upsert(entity) and trackPoints().insertAll(pointRows),
+        // leaving the activity row in the DB but no points (visible as a
+        // History entry with totals where Map and Export CSV were both inert
+        // because there were zero rows in track_point). Wrapped in a
+        // withTransaction so the two writes are atomic — either the whole
+        // session lands or neither does. runBlocking briefly stalls the main
+        // thread on a one-time stop event; Room's batch insert under WAL is
+        // fast enough (tens of ms even for thousands of points) that the hitch
+        // is imperceptible vs. the cost of losing the entire track.
+        runBlocking {
+            db.withTransaction {
+                db.activities().upsert(entity)
+                if (pointRows.isNotEmpty()) db.trackPoints().insertAll(pointRows)
+            }
         }
     }
 

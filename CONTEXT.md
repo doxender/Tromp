@@ -6,9 +6,9 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 
 ---
 
-## Snapshot (2026-05-01)
+## Snapshot (2026-05-04)
 
-- **Branch / version:** working on `wire-grade-and-autopause` off `master`. `versionName 1.14` / `versionCode 15`. Latest master commit `cfb529f` (keystore rotation merge).
+- **Branch / version:** on `fix-persist-activity-race` off `master`. `versionName 1.14.2` / `versionCode 17` (working tree carries the v1.14.1 persist-race fix plus v1.14.2 CSV enrichment, all uncommitted). Latest master commit `d5a4b39` (v1.14 wire-grade-and-autopause merge).
 - **Active branches still around:** `keystore-rotation`, `legal-and-maps`, `rename-tromp` — all merged into master, leftover. Safe to delete locally if Dan wants tidiness; doesn't affect CI.
 - **`applicationId` / `namespace`:** `com.comtekglobal.tromp`. Source root `app/src/main/java/com/comtekglobal/tromp/`.
 - **Toolchain:** AGP 8.13.2, Kotlin 1.9.24, JVM 17, KSP for Room (kapt was removed in 1.8 — see CHANGELOG). Room 2.7.2 at schema **v5** (`app/schemas/com.comtekglobal.tromp.data.db.TrekDatabase/` is the exported source of truth for migrations).
@@ -26,6 +26,12 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 - **Legal:** First-run blocking `SafetyDisclaimer` keyed to `CURRENT_VERSION = "2026-04-24.v1"`; `LicensesActivity` renders `res/raw/oss_licenses.txt`; README has the full Legal section.
 
 **Not yet built (canonical list lives in README "Not yet built" §):** dedicated live tracking screen (the main screen doubles as it for now), ribbon fallback, offline tile manager, activity detail w/ elevation profile chart (MPAndroidChart dep is declared but unused), full stats dashboard (DAOs `aggregateBetween` / `aggregateByTypeBetween` are ready), crash-recovery dialog, GPX export wired to UI, automatic session start on detected motion.
+
+## Recent bug — persistActivity race (fixed in v1.14.1)
+
+In v1.14 (and silently for many versions before, masked by point loss producing only inert buttons rather than a hard error), `TrackingService.persistActivity` dispatched the two stop-time DB writes via `scope.launch { upsert; insertAll }`. The service then called `stopSelf()` → `onDestroy()` → `scope.cancel()`. Cancellation could land between the two suspend calls, persisting the activity row but losing every track point. Symptom on Summary: "View Map" and "Export CSV" both dead because both gate on `points.isNotEmpty()`. Fix: `runBlocking { db.withTransaction { upsert; insertAll } }` — synchronous + atomic. See CHANGELOG [1.14.1].
+
+**Recovery side path:** `DebugLog.log("FIX", ...)` writes every accepted fix to `Android/data/com.comtekglobal.tromp/files/autostop.log` (2 MB rolling cap). The most recent session, if still in the log, can be parsed into GPX/CSV with `recover_track_from_log.py` at the repo root. Older sessions that aged out are unrecoverable.
 
 ## Gotchas worth keeping at the front of your mind
 
@@ -103,6 +109,82 @@ Probably: classify a segment as non-hiking only when **multiple** signals agree 
 - Should mid-track puttering be dropped from the polyline too, or kept-but-not-counted? (Dan likely cares more about clean totals than clean polyline.)
 - Where does the user override live? Sometimes a "puttering" segment is a real lunch break the user wants kept.
 - Auto-start: is it a separate piece of work, or does the classifier subsume it (run at stop, the classifier trims leading puttering anyway)? Probably the latter — classifier eats both the leading and trailing problem at once.
+
+### Classification rule Dan specified 2026-05-04 (apply on close, pre-stats)
+
+Per-fix classification using a ~15-second rolling window centered on the fix being classified. Evaluate in order — first match wins:
+
+| State | Predicate |
+|---|---|
+| **ACTIVE** | `avg_speed ≥ 0.6 m/s` AND `speed_variation ≤ 60% of avg` (i.e. coefficient of variation `stddev(speed)/mean(speed) ≤ 0.6`). Hiking. |
+| **CLAMBERING** | `avg_speed < 0.6 m/s` OR speed erratic, AND `(cadence ≥ ~30 spm` OR `|vertical_rate| ≥ ~0.1 m/s)`. Moving with effort, slowly — covers rocky scrambles, careful descent. |
+| **DAWDLING** | `avg_speed < 0.6 m/s`, low/no cadence, `|vertical_rate| < ~0.1 m/s`. Standing or puttering. |
+
+Cadence = `steps_delta / dt * 60` per fix (already computed by v1.14.2 CsvWriter). Vertical rate = `Δalt / dt` per fix (also v1.14.2). Both are inputs to the classifier; thresholds are starting values to tune against real CSVs after first 1.14.2 recordings land.
+
+**Decisions resolved 2026-05-04/05 (full set after Dan's 1b/2c/3a/4b/auto-paused-b/exclude-everything-a/delete-old-c-via-migration/c-bulk+per-activity/loc-speed-a/partial-windows-a/summary-with-note-b/diagnostic-cols-a):**
+
+1. **Effect on stats: exclude.** DAWDLING points don't count toward distance, moving time, avg/max speed, ascent, descent, max/min grade, or step count. Elapsed time is the only total that includes DAWDLING (wall-clock from start to stop).
+2. **Map: untouched.** Polyline shows every recorded fix as-is. Classification only affects totals.
+3. **Label persisted.** Room v6 → v7 migration adds `state TEXT` to `track_point` and `classifierVersion TEXT` to `activity`. Classifier runs once at stop in `TrackingService.stopTracking()` before `persistActivity`. The migration **wipes existing `activity`, `track_point`, and `waypoint` rows** as a one-time clean slate — calibration data (`known_location`, `offline_region`) is preserved. Going forward, new classifier versions don't wipe; users reclassify in place.
+4. **Thresholds tunable.** Constants in `TrackPostProcessor.kt`: `0.6 m/s` (active speed floor), `0.6 CV` (speed-stability ceiling), `30 spm` (cadence floor), `0.1 m/s` (vertical-rate floor). Revise after first real CSVs land.
+5. **Auto-paused points: classified normally.** The post-hoc rule has more signal than the live `AutoPauseDetector`; live verdict isn't binding.
+6. **Speed source: `loc.speed` (Doppler).** Same as `AutoPauseDetector`. Never chain-derived from haversine — that turns GPS jitter into phantom motion.
+7. **Window: 15 s, partial OK.** Window centered on the fix being classified; whatever fixes fall in that range are used. Single-fix windows (no neighbors) → no `dt`, no stddev, no cadence/vrate signal → defaults to DAWDLING. Acceptable behavior at session boundaries / after long fix gaps.
+8. **Reclassify UI: bulk + per-activity.** Settings → "Reclassify all activities" runs the current classifier across every activity. Summary → per-activity "Reclassify" button rewrites just that one. No banner.
+9. **Summary post-stop UI: filtered totals + note.** Summary shows post-classification totals as the headline numbers. A small line below reads "X.X km / YY min excluded as dawdling" so the user understands why the live numbers shrank.
+10. **CSV diagnostic columns:** Per-fix the CSV adds `state`, `state_reason` (short string like `speed_below_active`), `window_avg_speed_mps`, `window_speed_cv`, `window_avg_cadence_spm`, `window_avg_vrate_mps`. Lets Dan sort/filter in Excel during the threshold-tuning phase.
+
+Plan: implement as `tracking/TrackPostProcessor.kt`, pure-logic + unit-testable like `AutoStopTrimmer`. Run from `TrackingService.stopTracking()` before `persistActivity`. Recompute totals using the same shape `AutoStopTrimmer` already uses (filter to ACTIVE+CLAMBERING, walk neighbor pairs, sum distance + ascent/descent, recompute avg from totals).
+
+## Quick Start feature spec (2026-05-05, pending implementation)
+
+A single-shot "skip the full benchmark" flow Dan can use when he wants to start a hike fast. **Quick benchmarks are never saved to the `known_location` cache** — they're known to be lower-accuracy and shouldn't pollute the long-term cache.
+
+### UI
+
+- **Secondary button below the existing Start.** Smaller text-style button labeled "Quick Start." Big "Start" stays the primary action; Quick Start is the implicit "in a hurry" fallback.
+- **15-second acquisition modal** when tapped: spinner with title "Acquiring GPS…" and a Cancel button. No countdown — feels more natural than watching seconds tick down.
+- **No-fix dialog** if 15 s elapses without a fix, OR if a fix arrives but both DEM lookup and `loc.hasAltitude()` fail (no elevation reference): "Use next fix as start point" (primary) / Cancel (dismiss).
+- **Pre-fix-gap live UI** (deferred mode after user taps "Use next fix"): banner across the top reads "Acquiring GPS — start point will be set when first fix arrives." Distance, ascent, descent, grade, avg/max speed all display 0. Elapsed time and step count tick normally. When the first fix arrives, the banner clears and the totals start updating.
+
+### Cascade
+
+1. Take ONE GPS fix (15 s timeout, Cancel button live).
+2. ONE baro reading at the same moment (snap current pressure).
+3. If GPS fix arrives:
+   - Try ONE DEM lookup at fix's lat/lon (USGS 3DEP, fallback Open-Elevation, same client as full benchmark).
+   - **Benchmark elevation = DEM result if it succeeds, else `loc.altitude` if available, else null.**
+   - If non-null elevation: calibrate QNH from baro reading + elevation. Start tracking with calibrated QNH.
+   - If null: fall through to deferred-fix mode (same as no fix) — show the dialog.
+4. If 15 s timeout hits: show no-fix dialog. User picks "Use next fix" → start tracking with no QNH (yet); first fix during tracking re-runs the cascade and "nails up" the start.
+
+### Deferred-fix mode (user tapped "Use next fix")
+
+- Tracking starts immediately. `TrackingService.startTracking()` runs as normal but with `BenchmarkSession.qnhHpa = null` and the live screen in pre-fix-gap state.
+- Step counter, barometer, compass all record from tap-time onward. **Compass bearings recorded during the gap are stored for future dead-reckoning** even though we won't use them in v1.x (we want the data available so a later version can back-project the actual start position from steps + bearings without architectural changes).
+- When the first GPS fix arrives during tracking:
+  - Cascade re-runs in the background: DEM at fix lat/lon, fallback to `loc.altitude`, fallback null.
+  - If non-null elevation: calibrate QNH from baro reading **at start tap time** (we still have it) paired with the elevation. The fix point becomes the activity's start point.
+  - **Retroactively compute pre-fix-gap ascent** by walking through the buffered baro readings (timestamped pressures from start to first fix), converting each to altitude with the now-known QNH, feeding through `AscentAccumulator`. The resulting ascent counts toward totals (no track points to attach to, since there's no lat/lon for the gap, but the totals reflect it).
+  - Pre-fix gap doesn't contribute distance (no positions; dead reckoning deferred).
+- If user taps Stop before any fix ever arrives: save the activity with elapsed time, step count, and best-effort ascent (computed against default QNH 1013.25 since we never got a real elevation reference — absolute is meaningless but relative changes are right). Track point list empty. Map / Export CSV would be inert. Activity row still in History; rename / delete work.
+
+### Activity type / naming
+
+- Inherits the current default (`hike`). No type-picker in the Quick Start flow — that's part of "quick."
+
+### What we're recording during the gap (architecture for future)
+
+- Step counter samples (already wired through `StepCounterSource`).
+- Compass bearings — **new sensor source** to add: `CompassSource` cold Flow on `Sensor.TYPE_ROTATION_VECTOR`, sampled at ~1 Hz. Stored timestamped. Currently unused; v2-of-Quick-Start will consume them for dead reckoning.
+- Barometer pressures (already wired through `BarometerSource`).
+
+### Out of scope for v1.x of Quick Start
+
+- Dead reckoning (steps + compass → estimated displacement → back-project actual start). Hooks in place; implementation deferred.
+- Per-user step-length calibration. Hooks in place; implementation deferred.
+- "Quick benchmark" cache lookup at tap time. Quick Start always does the single-shot cascade; cache lookup is what regular Start is for.
 
 ## Update protocol
 
