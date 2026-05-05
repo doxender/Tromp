@@ -24,6 +24,7 @@ Hot-fix for a data-loss race in the v1.14 stop path. Symptom: an activity record
 
 ### Recovery
 - Lost tracks from prior 1.14 sessions are partially recoverable from `Android/data/com.comtekglobal.tromp/files/autostop.log` — every accepted location fix was logged with lat/lon/speed/accuracy/altitude, so the most recent session (within the log's 2 MB rolling cap) can be reconstructed into GPX/CSV. Tracks that aged out of the log before this fix landed are unrecoverable.
+- `scripts/recover_track_from_log.py` is the break-glass tool for this, kept in-tree so future incidents don't need it rewritten. Outputs match the in-app CsvWriter column shape (columns the log doesn't carry — pressure, bearing, GPS-vs-baro alt split, step counts — emit blank).
 
 ### Changed
 - `versionCode` 15 → 16, `versionName` `1.14` → `1.14.1`.
