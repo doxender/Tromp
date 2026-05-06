@@ -3,6 +3,7 @@
     <string name="app_name">Tromp</string>
 
     <string name="action_start">START</string>
+    <string name="action_quick_start">Quick Start</string>
     <string name="action_stop">Stop</string>
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
@@ -84,6 +85,13 @@
 
     <string name="status_idle">Ready</string>
     <string name="status_searching_gps">Still searching for GPS…</string>
+
+    <string name="quick_start_acquiring_title">Acquiring GPS…</string>
+    <string name="quick_start_acquiring_body">Locking in a single GPS fix and elevation. This usually takes a few seconds.</string>
+    <string name="quick_start_no_fix_title">No GPS fix yet</string>
+    <string name="quick_start_no_fix_body">Couldn\'t get a usable position + elevation in 15 seconds. You can start tracking now and the start point will be set when the first fix arrives.</string>
+    <string name="quick_start_use_next_fix">Use next fix as start</string>
+    <string name="acquiring_banner">Acquiring GPS — start point will be set when first fix arrives.</string>
 
     <string name="notif_channel_tracking">Tromp tracking</string>
     <string name="notif_channel_tracking_desc">Ongoing notification shown while an activity is being recorded.</string>

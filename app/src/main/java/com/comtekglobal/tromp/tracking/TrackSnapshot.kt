@@ -43,6 +43,17 @@ data class TrackSnapshot(
      */
     val autoStopReason: AutoStopDetector.Reason? = null,
     val autoStopTrimAfterMs: Long? = null,
+
+    /**
+     * True while a Quick-Start session is in deferred-fix mode — the user
+     * tapped "Use next fix" because the initial 15 s acquisition didn't
+     * produce a usable position+elevation pair. Tracking is running
+     * (elapsed/steps tick, baro+compass buffer for later) but no track
+     * points are being written and distance/ascent stay at zero. Cleared
+     * the moment the cascade locks: first fix that resolves to a non-null
+     * elevation calibrates QNH and the live pipeline takes over.
+     */
+    val isAcquiringFix: Boolean = false,
 ) {
     companion object {
         fun empty(activityId: Long, type: String) = TrackSnapshot(
@@ -60,6 +71,7 @@ data class TrackSnapshot(
             pressureHpa = null, qnhHpa = null,
             stepCount = 0,
             autoStopReason = null, autoStopTrimAfterMs = null,
+            isAcquiringFix = false,
         )
     }
 }

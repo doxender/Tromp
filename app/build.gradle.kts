@@ -12,8 +12,8 @@ android {
         applicationId = "com.comtekglobal.tromp"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.14.2"
+        versionCode = 19
+        versionName = "1.15.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -2,6 +2,41 @@
 
 All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.15.1] — Unreleased
+
+Diagnostic plumbing for the hike / clamber / dawdle classifier. Dan reported the v1.15.0 hike "looked pretty good" — encouraging signal that the rule shape is close, but we're still in the threshold-tuning phase. This release adds the classifier itself plus the data-export flow needed to validate it against real recordings, **without** touching activity totals, the map polyline, or persisting state to Room. Once the rule's calibrated against a few real hikes, the full rollout in `CONTEXT.md` "Pending discussion" items 1–9 lands as a separate change.
+
+### Added
+- **`TrackPostProcessor`** — pure-logic classifier in `tracking/`. Per-fix state ∈ {ACTIVE, CLAMBERING, DAWDLING} from a 15 s rolling window over `loc.speed` (Doppler, never haversine — CONTEXT.md item 6) plus per-pair cadence (`Δsteps/Δt`) and vertical rate (`Δalt/Δt`). Thresholds: `0.6 m/s` active speed floor, `0.6 CV` speed-stability ceiling, `30 spm` cadence floor, `0.1 m/s` vertical-rate floor (CONTEXT.md item 4 — tunable, expose as `const val` in the file). Single-fix windows default to DAWDLING (item 7).
+- **`TrackPostProcessorTest`** — unit-test coverage for the base cases (steady walk → ACTIVE, standing still → DAWDLING, slow climb → CLAMBERING), boundary cases (exactly at the speed floor), the single-fix default, and the timestamp-gap behaviour (a 60 s gap between two clusters means a fix in cluster A doesn't pull cluster B into its window). All run under `./gradlew :app:testDebugUnitTest`.
+- **Two-file diagnostic CSV export.** Every activity now generates two CSVs at stop and stores them with the hike under `Android/data/<applicationId>/files/exports/`:
+  - `tromp-<id>-pretrim.csv` — every fix, with `state` + `state_reason` + four `window_*` diagnostic columns (CONTEXT.md item 10) so Dan can sort/filter in Excel.
+  - `tromp-<id>-posttrim.csv` — same shape, but rows classified DAWDLING are dropped. Pre-existing `dist_from_prev_m` / `dt_from_prev_s` continue to reflect the original GPS sequence (not "since the last kept row") so Excel doesn't see fake gaps where dawdling was excised.
+- **Auto-export on stop.** `TrackingService.persistActivity` runs the classifier and writes both CSVs synchronously inside the existing `runBlocking { db.withTransaction { ... } }` block, so the files land before `stopSelf()` can race the writes (same race-avoidance reasoning as the v1.14.1 persist fix). Failures are logged but never block the activity persist.
+- **`CsvExportFiles`** — single source of truth for the per-activity file paths. Both `TrackingService` (auto-export) and `SummaryActivity` (manual share) call `CsvExportFiles.forActivity(context, id)` so file naming can't drift.
+
+### Changed
+- **Export CSV button shares both files.** `SummaryActivity.exportAndShareCsv` now fires `ACTION_SEND_MULTIPLE` with both CSV URIs attached so a single tap puts pre-trim + post-trim into the user's email / Drive together. Old activities recorded pre-1.15.1 don't have the files on disk yet — those are regenerated on demand by re-running the classifier against the persisted track points (no schema migration needed).
+- **`CsvWriter.write`** picked up an overload taking a parallel `List<Classification>` and an optional `includeStates: Set<State>` filter. The legacy single-arg overload (no classifications) still works — it just classifies fresh internally. The legacy single-file path (`tromp-<id>.csv`) is no longer written; old single-file exports stay where they are but new exports use the new names. Header banner gains `# variant,pretrim|posttrim` and `# classifier,TrackPostProcessor v1.15.1` rows so downstream scripts can tell the files apart.
+- `versionCode` 18 → 19, `versionName` `1.15.0` → `1.15.1`.
+
+## [1.15.0] — Unreleased
+
+Quick Start: a one-tap path that skips the full 60 s benchmark when the user wants to start a hike fast. Long-standing UI gap — every prior session had to walk through the full Acquire-Benchmark flow even when a rough QNH lock was good enough. Spec lived in `CONTEXT.md` "Quick Start feature spec" since 2026-05-05; this release implements it.
+
+### Added
+- **"Quick Start" button on the main screen** — secondary text-style button below the primary START. Taps open a 15 s "Acquiring GPS…" modal with a Cancel button.
+- **Single-shot acquisition cascade.** Within the 15 s window, takes one GPS fix and one barometer reading concurrently, then runs a DEM lookup at the fix's lat/lon. Elevation precedence: USGS 3DEP → Open-Elevation → `loc.altitude` → null. If a non-null elevation lands, calibrates QNH from the baro reading and starts tracking immediately.
+- **Deferred-fix mode.** If the 15 s window times out without a fix, OR a fix arrives but no elevation reference can be resolved, the user is offered "Use next fix as start point." Tracking starts immediately with `isAcquiringFix = true`; the live screen shows a banner *"Acquiring GPS — start point will be set when first fix arrives."*; distance/ascent/descent stay at zero; elapsed time and step counter tick normally. The first GPS fix during tracking re-runs the cascade and locks elevation. Per Dan's call (2026-05-05) the cascade retries on every accepted fix until one succeeds — robust to fixes that lack altitude (rare but possible).
+- **Retroactive ascent for the deferred-fix gap.** Barometer samples are buffered during the gap, timestamped. When the cascade locks, the QNH is calibrated from the earliest buffered sample (closest to tap time) + the resolved elevation, then the full buffer is replayed through `AscentAccumulator` so any climbing during the gap counts toward totals. If the user stops without ever locking a fix, the buffer is replayed against the ISA default QNH 1013.25 — absolute altitudes are meaningless but Δp → Δalt deltas are still correct, so totals reflect real ascent.
+- **`CompassSource`** — wraps `Sensor.TYPE_ROTATION_VECTOR` as a cold `Flow<Float>` of bearings (0..360°). Subscribed only during the deferred-fix gap and only used to buffer timestamped readings — no consumer in v1.x. Architectural placeholder for a future version that back-projects the actual start position from buffered step deltas + bearings via dead reckoning (CONTEXT.md "Out of scope for v1.x of Quick Start").
+- **`isAcquiringFix` on `TrackSnapshot`** drives the banner. False for all non-Quick-Start sessions; remains true during the deferred-fix gap; flips to false the moment elevation locks (or stop is tapped without a lock).
+
+### Changed
+- `TrackingService.startTracking(type, quickStart)` — new boolean param, wired via `EXTRA_QUICK_START` intent extra. When true with no QNH yet, the service subscribes to barometer + compass even without a calibrated QNH, sets `isAcquiringFix = true` in the initial snapshot, and runs the deferred-fix pipeline.
+- Quick Start benchmarks are populated into `BenchmarkSession.current` / `qnhHpa` in-memory only — `BenchmarkSession.save()` is **not** called. They're known to be lower-accuracy than a 60 s averaged benchmark and shouldn't poison future regular-Start proximity hits or the `known_location` cache.
+- `versionCode` 17 → 18, `versionName` `1.14.2` → `1.15.0`.
+
 ## [1.14.2] — Unreleased
 
 CSV export enrichment for the segmenter-tuning workflow. Saves having to type formulas in Excel for the two derived rates Dan was already eyeballing by hand.

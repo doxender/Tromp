@@ -5,6 +5,7 @@ package com.comtekglobal.tromp.export
 
 import com.comtekglobal.tromp.data.db.ActivityEntity
 import com.comtekglobal.tromp.data.db.TrackPointEntity
+import com.comtekglobal.tromp.tracking.TrackPostProcessor
 import com.comtekglobal.tromp.util.haversineMeters
 import java.io.Writer
 import java.text.SimpleDateFormat
@@ -48,10 +49,47 @@ object CsvWriter {
         return abs(d)
     }
 
+    /**
+     * Convenience overload: classify the points fresh and write the full
+     * (pre-trim) CSV in one call. Most callers want the parameterised
+     * [write] below so they can share a single classification across the
+     * pre-trim and post-trim files.
+     */
     fun write(out: Writer, activity: ActivityEntity, points: List<TrackPointEntity>) {
+        val samples = points.map {
+            TrackPostProcessor.Sample(
+                tMs = it.time,
+                speedMps = it.speedMps.toDouble(),
+                altM = it.altM,
+                cumStepCount = it.cumStepCount,
+            )
+        }
+        val classifications = TrackPostProcessor.classify(samples)
+        write(out, activity, points, classifications, includeStates = null)
+    }
+
+    /**
+     * @param includeStates if non-null, only rows whose classification is
+     *  in the set are written (used to produce the post-trim CSV that
+     *  excludes DAWDLING). If null every row is written (pre-trim CSV).
+     */
+    fun write(
+        out: Writer,
+        activity: ActivityEntity,
+        points: List<TrackPointEntity>,
+        classifications: List<TrackPostProcessor.Classification>,
+        includeStates: Set<TrackPostProcessor.State>?,
+    ) {
+        require(points.size == classifications.size) {
+            "points.size=${points.size} != classifications.size=${classifications.size}"
+        }
         // Header banner — a few activity-summary rows above the table so the
         // CSV is self-describing when opened cold in Excel.
         out.write("# Tromp activity export\n")
+        out.write(
+            "# variant,${if (includeStates == null) "pretrim" else "posttrim"}\n"
+        )
+        out.write("# classifier,TrackPostProcessor v1.15.1\n")
         out.write("# id,${activity.id}\n")
         out.write("# name,${escape(activity.name ?: "")}\n")
         out.write("# type,${escape(activity.type)}\n")
@@ -71,7 +109,10 @@ object CsvWriter {
         out.write("# qnh_hpa,${activity.qnhHpa ?: ""}\n")
         out.write("#\n")
 
-        // Column headers.
+        // Column headers. New in v1.15.1: state + state_reason + four
+        // window_* signals straight from TrackPostProcessor so the same
+        // classifier output drives both Excel filtering and the in-app
+        // post-trim file (CONTEXT.md item 10).
         out.write(
             listOf(
                 "seq", "time_utc", "time_local", "tMs",
@@ -83,12 +124,21 @@ object CsvWriter {
                 "bearing_change_deg", "steps_delta",
                 "stride_m_per_step", "cadence_spm",
                 "vertical_rate_mps",
+                "state", "state_reason",
+                "window_avg_speed_mps", "window_speed_cv",
+                "window_avg_cadence_spm", "window_avg_vrate_mps",
             ).joinToString(",")
         )
         out.write("\n")
 
         var prev: TrackPointEntity? = null
-        for (p in points) {
+        for ((idx, p) in points.withIndex()) {
+            val cls = classifications[idx]
+            // Filter applies to the row write only — neighbour deltas
+            // continue to use the *original* sequence so a post-trim row's
+            // dt_from_prev_s reflects the actual GPS gap, not "since the
+            // last kept row." Otherwise Excel would see fake jumps where
+            // dawdling stretches were dropped.
             val dist = prev?.let { haversineMeters(it.lat, it.lon, p.lat, p.lon) }
             val dtSec = prev?.let { (p.time - it.time) / 1000.0 }
             val dBear = bearingDelta(prev?.bearingDeg, p.bearingDeg)
@@ -96,21 +146,17 @@ object CsvWriter {
             val stride = if (dSteps != null && dSteps > 0 && dist != null && dist > 0) {
                 dist / dSteps
             } else null
-            // cadence_spm = steps_delta / dt * 60. Only meaningful when dt > 0
-            // and we have a previous fix to diff against. While auto-paused the
-            // step counter doesn't advance so cadence naturally evaluates to 0,
-            // which is the right answer.
             val cadenceSpm = if (dSteps != null && dtSec != null && dtSec > 0) {
                 dSteps / dtSec * 60.0
             } else null
-            // vertical_rate_mps = Δalt / dt. Sign carries direction (positive =
-            // climbing, negative = descending). altM is the chosen altitude
-            // (baro-when-calibrated, GPS otherwise) so this matches what the
-            // ascent accumulator sees.
             val vrate = if (dtSec != null && dtSec > 0) {
                 (p.altM - (prev?.altM ?: p.altM)) / dtSec
             } else null
+            prev = p
 
+            if (includeStates != null && cls.state !in includeStates) continue
+
+            val sig = cls.signals
             out.write(
                 listOf(
                     p.seq.toString(),
@@ -134,10 +180,15 @@ object CsvWriter {
                     stride?.let { "%.3f".format(Locale.US, it) } ?: "",
                     cadenceSpm?.let { "%.1f".format(Locale.US, it) } ?: "",
                     vrate?.let { "%.3f".format(Locale.US, it) } ?: "",
+                    cls.state.name,
+                    cls.reason,
+                    sig.avgSpeedMps?.let { "%.3f".format(Locale.US, it) } ?: "",
+                    sig.speedCv?.let { "%.3f".format(Locale.US, it) } ?: "",
+                    sig.avgCadenceSpm?.let { "%.1f".format(Locale.US, it) } ?: "",
+                    sig.avgVrateMps?.let { "%.3f".format(Locale.US, it) } ?: "",
                 ).joinToString(",")
             )
             out.write("\n")
-            prev = p
         }
         out.flush()
     }

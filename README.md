@@ -2,7 +2,7 @@
 
 _(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data; the release keystore was rotated to a fresh Tromp identity on 2026-04-24. See [CHANGELOG.md](CHANGELOG.md) and the Decision Log for why.)_
 
-**Version 1.14.2** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**Version 1.15.1** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
 
@@ -34,10 +34,11 @@ Install on-device:
 ### Working end-to-end
 
 - **Benchmarking** — a short pre-session flow that establishes a base elevation (from DEM lookup and GPS averaging) and calibrates the barometer to that elevation, so live altitude during tracking comes from the barometer instead of GPS.
+- **Quick Start** — secondary "Quick Start" button below the main START. Skips the full 60 s benchmark for users in a hurry: takes one GPS fix + one barometer reading + one DEM lookup within a 15 s window and starts tracking with whatever it can lock. If the window times out without a usable fix or elevation, offers a deferred-fix mode — tracking starts immediately and the start point is set the moment the first fix arrives, with retroactive ascent computed from buffered barometer samples. Quick benchmarks are session-only and aren't written to the cache.
 - **Record an activity** — foreground-service tracking via `FusedLocationProviderClient`. Distance via haversine, ascent/descent via the 3 m-hysteresis accumulator from DESIGN.md §6.1. Live duration + totals on the main screen and in the ongoing notification.
 - **Stop + Summary** — final totals (duration, distance, ascent/descent, avg/max speed, point count) with a button to view the track on an OpenStreetMap polyline (osmdroid).
 - **History** — every completed activity is persisted to Room (`activity` + `track_point` tables). Main-screen clock icon opens a list with an all-time totals header. Tap an entry to reopen its Summary + Map.
-- **CSV export** — the Summary screen has an Export CSV button that writes the enriched per-point capture (lat/lon/alt, speed, bearing, cumulative step count, auto-pause flag, plus neighbor deltas) to `Android/data/com.comtekglobal.tromp/files/exports/tromp-<activityId>.csv` and opens the share sheet. Diagnostic feature — pulled into Excel so the eventual hike-vs-puttering classifier can be tuned against real recordings before deciding what the rule should look like.
+- **CSV export (diagnostic)** — every stop auto-writes two CSVs to `Android/data/com.comtekglobal.tromp/files/exports/`: `tromp-<activityId>-pretrim.csv` (every fix) and `tromp-<activityId>-posttrim.csv` (rows classified DAWDLING dropped). Both carry `state` + `state_reason` + four `window_*` diagnostic columns from `TrackPostProcessor` (15 s rolling window, hike/clamber/dawdle classifier; thresholds tunable via the constants in the file). The Export CSV button on Summary shares both via the system share sheet (ACTION_SEND_MULTIPLE). Activity totals and the map polyline are NOT yet trimmed against the classifier — that rollout waits until the rule's calibrated against real recordings.
 
 ### Pure-logic core (unit-tested)
 

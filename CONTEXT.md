@@ -6,9 +6,9 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 
 ---
 
-## Snapshot (2026-05-04)
+## Snapshot (2026-05-05)
 
-- **Branch / version:** on `fix-persist-activity-race` off `master`. `versionName 1.14.2` / `versionCode 17` (working tree carries the v1.14.1 persist-race fix plus v1.14.2 CSV enrichment, all uncommitted). Latest master commit `d5a4b39` (v1.14 wire-grade-and-autopause merge).
+- **Branch / version:** on `master`. `versionName 1.15.1` / `versionCode 19`. v1.14.1 + v1.14.2 are committed (latest commit `7a28778`); v1.15.0 Quick Start + v1.15.1 classifier diagnostic export ship as a single follow-up commit on master.
 - **Active branches still around:** `keystore-rotation`, `legal-and-maps`, `rename-tromp` — all merged into master, leftover. Safe to delete locally if Dan wants tidiness; doesn't affect CI.
 - **`applicationId` / `namespace`:** `com.comtekglobal.tromp`. Source root `app/src/main/java/com/comtekglobal/tromp/`.
 - **Toolchain:** AGP 8.13.2, Kotlin 1.9.24, JVM 17, KSP for Room (kapt was removed in 1.8 — see CHANGELOG). Room 2.7.2 at schema **v5** (`app/schemas/com.comtekglobal.tromp.data.db.TrekDatabase/` is the exported source of truth for migrations).
@@ -137,9 +137,32 @@ Cadence = `steps_delta / dt * 60` per fix (already computed by v1.14.2 CsvWriter
 
 Plan: implement as `tracking/TrackPostProcessor.kt`, pure-logic + unit-testable like `AutoStopTrimmer`. Run from `TrackingService.stopTracking()` before `persistActivity`. Recompute totals using the same shape `AutoStopTrimmer` already uses (filter to ACTIVE+CLAMBERING, walk neighbor pairs, sum distance + ascent/descent, recompute avg from totals).
 
-## Quick Start feature spec (2026-05-05, pending implementation)
+### Status (v1.15.1, 2026-05-05)
 
-A single-shot "skip the full benchmark" flow Dan can use when he wants to start a hike fast. **Quick benchmarks are never saved to the `known_location` cache** — they're known to be lower-accuracy and shouldn't pollute the long-term cache.
+- **Classifier built.** `tracking/TrackPostProcessor.kt` ships the rule above with the documented thresholds, plus `TrackPostProcessorTest` covering ACTIVE / CLAMBERING / DAWDLING base cases, the single-fix-window default, threshold boundaries, and the timestamp-gap behaviour.
+- **Diagnostic export wired.** Every stop auto-generates `tromp-<id>-pretrim.csv` (every fix with `state` + four `window_*` columns) and `tromp-<id>-posttrim.csv` (DAWDLING dropped). Both land in `Android/data/<applicationId>/files/exports/` next to the activity. Summary's Export CSV button shares both via ACTION_SEND_MULTIPLE.
+- **Activity totals, map polyline, and Room state persistence are deliberately untouched.** Decisions 1–9 of the resolved set haven't been actioned yet — Dan validates the rule against real recordings first, then we land the full rollout (Room v6 → v7 migration with the one-time activity-table wipe, summary "X km excluded as dawdling" line, bulk + per-activity reclassify, etc.) as a separate change.
+
+### Next steps when ready to ship the full rollout
+
+- Apply the Room v6 → v7 migration described in item 3 (adds `state TEXT` to `track_point`, `classifierVersion TEXT` to `activity`, wipes existing rows).
+- Update `TrackingService.stopTracking()` to recompute totals against the ACTIVE+CLAMBERING subset before persistActivity.
+- Wire the bulk + per-activity reclassify entry points (Settings / Summary).
+- Land the "X.X km / YY min excluded as dawdling" line on Summary (item 9).
+
+## Quick Start (shipped in v1.15.0, 2026-05-05)
+
+Single-shot "skip the full benchmark" flow. **Quick benchmarks are never saved to the `known_location` cache** — they're known to be lower-accuracy than the 60 s averaged benchmark and shouldn't pollute the long-term cache. Also not persisted to the `BenchmarkSession` SharedPreferences (in-memory only — they don't outlive the app process).
+
+### Implementation pointers
+- UI: `MainActivity.onQuickStartClicked()`. Permission gating mirrors regular Start (`REQ_FINE_LOCATION_QUICK`/`REQ_NOTIFICATIONS_QUICK`/`REQ_ACTIVITY_RECOGNITION_QUICK`); 15 s acquisition modal in `showAcquiringDialog()`; `showNoFixDialog()` covers the timeout / no-elevation paths.
+- Service: `TrackingService.startTracking(type, quickStart)` reads `EXTRA_QUICK_START`. Deferred-mode plumbing: `tryStartCascade()` (per-fix, AtomicBoolean-guarded), `onElevationLocked()` (calibrates QNH, replays `bufferedBaro` through `AscentAccumulator`, populates `BenchmarkSession.current` in-memory). Stop-without-lock path in `stopTracking()` walks `bufferedBaro` against ISA default QNH 1013.25 so totals still reflect real ascent.
+- Sensors: `CompassSource` (`Sensor.TYPE_ROTATION_VECTOR` → cold `Flow<Float>` of 0..360° bearings). Subscribed only during the deferred-fix gap. Buffer is in-memory and unconsumed in v1.x — placeholder for the v2 dead-reckoning back-projection.
+- Snapshot: `TrackSnapshot.isAcquiringFix` drives the banner in `activity_main.xml` (`txtAcquiringBanner`).
+
+### Original spec (kept verbatim for traceability)
+
+A single-shot "skip the full benchmark" flow Dan can use when he wants to start a hike fast.
 
 ### UI
 

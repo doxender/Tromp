@@ -29,6 +29,8 @@ service/     TrackingService (foreground, location|dataSync) + TrackingNotifier
 tracking/    GradeCalculator, AscentAccumulator, AutoPauseDetector, QnhCalibrator, TrackSnapshot
 location/    LocationSource — FusedLocationProviderClient as a cold Flow<Location>
 sensors/     BarometerSource — TYPE_PRESSURE as a cold Flow<Float>
+             StepCounterSource — TYPE_STEP_COUNTER as a cold Flow<Float>
+             CompassSource — TYPE_ROTATION_VECTOR → bearing-degrees Flow<Float>
 elevation/   DemClient — USGS 3DEP + Open-Elevation lookups (blocking; call from IO)
 export/      GpxWriter — GPX 1.1 serializer
 data/db/     Room entities, DAOs, TrekDatabase
@@ -36,15 +38,17 @@ ui/main/     MainActivity — idle landing screen
 util/        Haversine, Units, Time
 ```
 
-### Implementation state (2026-05-01, v1.14)
+### Implementation state (2026-05-05, v1.15.1)
 
 For per-version detail see `CHANGELOG.md`; for current gotchas + state at-a-glance see `CONTEXT.md`. Brief tour:
 
-**Pure-logic core, all unit-tested**: `GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `AutoStopDetector`, `AutoStopTrimmer`, `QnhCalibrator`, `Haversine`, `Units`, `GpxWriter`. If you change their behavior, update the tests — they encode the subtle invariants and are the first line of defense.
+**Pure-logic core, all unit-tested**: `GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `AutoStopDetector`, `AutoStopTrimmer`, `QnhCalibrator`, `TrackPostProcessor`, `Haversine`, `Units`, `GpxWriter`. If you change their behavior, update the tests — they encode the subtle invariants and are the first line of defense.
 
 **Wired into the live pipeline**: `TrackingService` collects from `LocationSource` + `BarometerSource` + `StepCounterSource`, runs each accepted fix through accuracy filter → distance (Haversine) → ascent (`AscentAccumulator`) → grade (`GradeCalculator`) → auto-pause (`AutoPauseDetector`) → auto-stop (`AutoStopDetector`), emits `TrackSnapshot` via `StateFlow`, and on stop persists `ActivityEntity` + `TrackPointEntity` to Room. The 1 Hz ticker advances `elapsedMs` always and `movingMs` while not paused / auto-paused.
 
-**UI shipped**: `MainActivity` (idle + live status + auto-stop dialog + settings dialog), `BenchmarkActivity`, `CalibrationActivity`, `SummaryActivity`, `MapActivity` (osmdroid polyline), `HistoryActivity` (list with rename/delete), `BenchmarksActivity` (cache management), `LicensesActivity`. First-run safety disclaimer (`SafetyDisclaimer`) blocks until accepted.
+**UI shipped**: `MainActivity` (idle + live status + auto-stop dialog + settings dialog + Quick Start button + acquiring-fix banner), `BenchmarkActivity`, `CalibrationActivity`, `SummaryActivity`, `MapActivity` (osmdroid polyline), `HistoryActivity` (list with rename/delete), `BenchmarksActivity` (cache management), `LicensesActivity`. First-run safety disclaimer (`SafetyDisclaimer`) blocks until accepted.
+
+**Quick Start (v1.15.0)**: secondary path that skips the full benchmark — single 15 s acquisition (one fix + one baro reading + DEM lookup), or deferred-fix mode that starts tracking immediately and locks elevation when the first usable fix arrives. The deferred mode buffers timestamped baro samples (replayed through `AscentAccumulator` once QNH locks) and timestamped compass bearings (unconsumed in v1.x — placeholder for future dead-reckoning back-projection). Quick benchmarks are session-only and never written to the `known_location` cache or `BenchmarkSession` SharedPrefs. See CONTEXT.md for the implementation pointers.
 
 **Not yet built** (canonical list lives in `README.md` "Not yet built"):
 - Dedicated live tracking screen (large metrics tiles, manual pause/resume button, waypoint drop) — main screen doubles as the live view for now.

@@ -16,7 +16,9 @@ import com.comtekglobal.tromp.data.db.ActivityEntity
 import com.comtekglobal.tromp.data.db.TrackPointEntity
 import com.comtekglobal.tromp.data.db.TrekDatabase
 import com.comtekglobal.tromp.databinding.ActivitySummaryBinding
+import com.comtekglobal.tromp.export.CsvExportFiles
 import com.comtekglobal.tromp.export.CsvWriter
+import com.comtekglobal.tromp.tracking.TrackPostProcessor
 import com.comtekglobal.tromp.tracking.TrackingSession
 import com.comtekglobal.tromp.ui.map.MapActivity
 import com.comtekglobal.tromp.util.UnitPrefs
@@ -28,7 +30,7 @@ import com.comtekglobal.tromp.util.formatSpeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
+import java.util.ArrayList
 
 /**
  * Post-activity summary: totals + a link to the map. Reads from the in-memory
@@ -82,11 +84,13 @@ class SummaryActivity : AppCompatActivity() {
     }
 
     /**
-     * Writes the active session's enriched per-point capture to a CSV under
-     * `Android/data/<applicationId>/files/exports/<activityId>.csv` and opens
-     * the system share sheet so the user can email / Drive / etc. it. The
-     * file remains in place after sharing — `adb pull` and the device's
-     * Files app can both read it back.
+     * v1.15.1: shares both diagnostic CSVs at once via ACTION_SEND_MULTIPLE
+     * (pre-trim and post-trim, both produced by `TrackingService` at stop
+     * and parked next to each other in
+     * `Android/data/<applicationId>/files/exports/`). For activities
+     * recorded before v1.15.1 the auto-export hadn't run, so the files are
+     * regenerated on demand by re-running the classifier against the
+     * persisted points — no schema migration needed.
      */
     private fun exportAndShareCsv(activityId: Long?) {
         if (activityId == null) {
@@ -95,25 +99,22 @@ class SummaryActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             try {
-                val (file, mimeType) = withContext(Dispatchers.IO) {
-                    val db = TrekDatabase.get(this@SummaryActivity)
-                    val activity: ActivityEntity = db.activities().byId(activityId)
-                        ?: error("activity row missing")
-                    val rows: List<TrackPointEntity> = db.trackPoints().forActivity(activityId)
-                    val dir = File(getExternalFilesDir(null), "exports").apply { mkdirs() }
-                    val out = File(dir, "tromp-$activityId.csv")
-                    out.bufferedWriter().use { CsvWriter.write(it, activity, rows) }
-                    out to "text/csv"
+                val files = withContext(Dispatchers.IO) {
+                    val csvFiles = CsvExportFiles.forActivity(this@SummaryActivity, activityId)
+                    if (!csvFiles.preTrim.exists() || !csvFiles.postTrim.exists()) {
+                        regenerateCsvFiles(activityId, csvFiles)
+                    }
+                    csvFiles
                 }
-                toast(getString(R.string.summary_export_csv_saved, file.name))
-                val uri: Uri = FileProvider.getUriForFile(
-                    this@SummaryActivity,
-                    "$packageName.fileprovider",
-                    file,
-                )
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = mimeType
-                    putExtra(Intent.EXTRA_STREAM, uri)
+                toast(getString(R.string.summary_export_csv_saved, files.preTrim.name))
+                val authority = "$packageName.fileprovider"
+                val uris = ArrayList<Uri>(2).apply {
+                    add(FileProvider.getUriForFile(this@SummaryActivity, authority, files.preTrim))
+                    add(FileProvider.getUriForFile(this@SummaryActivity, authority, files.postTrim))
+                }
+                val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "text/csv"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                     putExtra(
                         Intent.EXTRA_SUBJECT,
                         getString(R.string.summary_export_csv_subject),
@@ -134,6 +135,35 @@ class SummaryActivity : AppCompatActivity() {
                     )
                 )
             }
+        }
+    }
+
+    private suspend fun regenerateCsvFiles(activityId: Long, files: CsvExportFiles) {
+        val db = TrekDatabase.get(this@SummaryActivity)
+        val activity: ActivityEntity = db.activities().byId(activityId)
+            ?: error("activity row missing")
+        val rows: List<TrackPointEntity> = db.trackPoints().forActivity(activityId)
+        val samples = rows.map {
+            TrackPostProcessor.Sample(
+                tMs = it.time,
+                speedMps = it.speedMps.toDouble(),
+                altM = it.altM,
+                cumStepCount = it.cumStepCount,
+            )
+        }
+        val classifications = TrackPostProcessor.classify(samples)
+        files.dir.mkdirs()
+        files.preTrim.bufferedWriter().use {
+            CsvWriter.write(it, activity, rows, classifications, includeStates = null)
+        }
+        files.postTrim.bufferedWriter().use {
+            CsvWriter.write(
+                it, activity, rows, classifications,
+                includeStates = setOf(
+                    TrackPostProcessor.State.ACTIVE,
+                    TrackPostProcessor.State.CLAMBERING,
+                ),
+            )
         }
     }
 
