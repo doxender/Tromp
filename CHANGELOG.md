@@ -52,6 +52,23 @@ documentation findings from the June 2026 ownership review.
 - README, DESIGN, CLAUDE, and CONTEXT now match the actual AGP 9.2.0 / Kotlin
   2.2.10 / Gradle 9.4.1 / Room schema v6 project.
 
+### Validation
+- The tagged GitHub workflow passed unit tests, full debug lint, debug
+  assembly, protected-key release assembly, and release publication.
+- The published APK was downloaded independently, matched SHA-256
+  `db6294f446a23606dcc76cb1d44552ce8e2bf2e5da193494ce33323f7c9ed784`,
+  and verified with the documented 1.16 release certificate.
+- On 2026-06-24, the release was exercised on a Samsung SM-S938U running
+  Android 16. Launch, History, Settings, Quick Start, foreground tracking,
+  notification controls, stop/finalization, Summary, and History persistence
+  all passed.
+- Forced process death during an active recording restarted the sticky
+  service under a new process, restored the active session, resumed the
+  foreground notification, and preserved elapsed time.
+- The retired-key 1.15.1 installation was cleanly removed and the exact
+  published 1.16.1 production package installed, permissioned, and verified
+  at the Ready screen without an unexpected crash.
+
 ## [1.15.1] — Unreleased
 
 Diagnostic plumbing for the hike / clamber / dawdle classifier. Dan reported the v1.15.0 hike "looked pretty good" — encouraging signal that the rule shape is close, but we're still in the threshold-tuning phase. This release adds the classifier itself plus the data-export flow needed to validate it against real recordings, **without** touching activity totals, the map polyline, or persisting state to Room. Once the rule's calibrated against a few real hikes, the full rollout in `CONTEXT.md` "Pending discussion" items 1–9 lands as a separate change.

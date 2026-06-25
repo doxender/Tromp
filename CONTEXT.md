@@ -9,6 +9,11 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 ## Snapshot (2026-06-24)
 
 - **Branch / version:** on `master`. `versionName 1.16.1` / `versionCode 20`.
+- **1.16.1 release validation:** tagged CI and protected signing passed. The
+  published production APK was installed on a Samsung SM-S938U running
+  Android 16 after the required retired-key uninstall. Physical smoke testing
+  passed launch, navigation, Quick Start, foreground tracking, forced
+  process-death recovery, stop/finalization, Summary, and History persistence.
 - **`applicationId` / `namespace`:** `com.comtekglobal.tromp`. Source root `app/src/main/java/com/comtekglobal/tromp/`.
 - **Toolchain:** AGP 9.2.0, Kotlin 2.2.10, Gradle 9.4.1, JVM 17, KSP, Room 2.7.2 at schema **v6**.
 - **Release signing:** no private key is stored in Git. Local signing reads `TROMP_KEYSTORE_*` Gradle properties; tag CI reads protected GitHub secrets. The pre-1.16 public key is compromised and retired.
