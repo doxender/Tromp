@@ -7,8 +7,8 @@ package com.comtekglobal.tromp.tracking
  * In-memory buffer of the fixes recorded during the current (or most recent)
  * tracking session and the final snapshot emitted by TrackingService on stop.
  * Live + Summary + Map screens read from here for low-latency rendering;
- * persistence happens in parallel via TrackingService.persistActivity, and
- * History opens past activities by re-populating this object from Room.
+ * Room is the durable source of truth; this object is a process-local working
+ * set used by live UI, Summary, and Map.
  */
 object TrackingSession {
 
@@ -36,6 +36,13 @@ object TrackingSession {
 
     @Synchronized
     fun points(): List<Point> = _points.toList()
+
+    @Synchronized
+    fun replace(points: List<Point>, snapshot: TrackSnapshot?) {
+        _points.clear()
+        _points.addAll(points)
+        lastSnapshot = snapshot
+    }
 
     @Synchronized
     fun reset() {

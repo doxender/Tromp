@@ -107,9 +107,7 @@ class BenchmarkActivity : AppCompatActivity() {
                 val quickFix = locationSource.lastKnown()
                 DebugLog.log(
                     "BENCH",
-                    "lastKnown=${
-                        quickFix?.let { "lat=%.6f lon=%.6f acc=%.1f".format(it.latitude, it.longitude, it.accuracy) } ?: "null"
-                    }"
+                    "lastKnown=${quickFix?.let { "available acc=%.1f".format(it.accuracy) } ?: "null"}"
                 )
                 if (quickFix != null) {
                     val cached = findNearbyKnown(quickFix.latitude, quickFix.longitude)
@@ -237,7 +235,7 @@ class BenchmarkActivity : AppCompatActivity() {
 
         binding.txtStatus.text = "Averaged ${fixes.size} fixes. Querying DEMs…"
 
-        DebugLog.log("BENCH", "demLookup start lat=%.6f lon=%.6f fixes=%d".format(lat, lon, fixes.size))
+        DebugLog.log("BENCH", "demLookup start fixes=${fixes.size}")
         val dem = withContext(Dispatchers.IO) { DemClient.lookup(lat, lon) }
         DebugLog.log("BENCH", "demLookup result usgs=${dem.usgsElevM} open=${dem.openElevM}")
 
@@ -272,7 +270,13 @@ class BenchmarkActivity : AppCompatActivity() {
             sb.appendLine("  typical accuracy: ~5–10 m")
             sb.appendLine()
         } ?: run {
-            sb.appendLine("✗ Open-Elevation: unreachable")
+            sb.appendLine(
+                if (dem.openElevationAttempted) {
+                    "✗ Open-Elevation: unreachable"
+                } else {
+                    "Open-Elevation: not needed"
+                }
+            )
             sb.appendLine()
         }
         baroAvg?.let {

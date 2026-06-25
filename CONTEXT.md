@@ -6,14 +6,13 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 
 ---
 
-## Snapshot (2026-05-05)
+## Snapshot (2026-06-24)
 
-- **Branch / version:** on `master`. `versionName 1.15.1` / `versionCode 19`. v1.14.1 + v1.14.2 are committed (latest commit `7a28778`); v1.15.0 Quick Start + v1.15.1 classifier diagnostic export ship as a single follow-up commit on master.
-- **Active branches still around:** `keystore-rotation`, `legal-and-maps`, `rename-tromp` — all merged into master, leftover. Safe to delete locally if Dan wants tidiness; doesn't affect CI.
+- **Branch / version:** on `master`. `versionName 1.16.1` / `versionCode 20`.
 - **`applicationId` / `namespace`:** `com.comtekglobal.tromp`. Source root `app/src/main/java/com/comtekglobal/tromp/`.
-- **Toolchain:** AGP 8.13.2, Kotlin 1.9.24, JVM 17, KSP for Room (kapt was removed in 1.8 — see CHANGELOG). Room 2.7.2 at schema **v5** (`app/schemas/com.comtekglobal.tromp.data.db.TrekDatabase/` is the exported source of truth for migrations).
-- **Release keystore:** committed at `app/release.keystore` (CN=Tromp, alias=tromp, password=tromp2026). Pre-rotation TrekTracker keystore archived at `app/release.keystore.trektracker.bak` — never reuse it.
-- **CI:** GitHub Actions `.github/workflows/build.yml` builds a signed APK on every push, attaches to release on `v*` tags.
+- **Toolchain:** AGP 9.2.0, Kotlin 2.2.10, Gradle 9.4.1, JVM 17, KSP, Room 2.7.2 at schema **v6**.
+- **Release signing:** no private key is stored in Git. Local signing reads `TROMP_KEYSTORE_*` Gradle properties; tag CI reads protected GitHub secrets. The pre-1.16 public key is compromised and retired.
+- **CI:** every push/PR runs tests + full lint + debug assembly. Only verified `v*` tags build and publish a secret-signed release APK.
 
 ## What's actually built (vs. what `CLAUDE.md` says)
 
@@ -25,23 +24,32 @@ For the canonical spec see `DESIGN.md`. For session-coding guidance see `CLAUDE.
 - **Settings dialog (gear):** Units (Imperial default), Manage benchmarks, Safety & disclaimer, Open source licenses.
 - **Legal:** First-run blocking `SafetyDisclaimer` keyed to `CURRENT_VERSION = "2026-04-24.v1"`; `LicensesActivity` renders `res/raw/oss_licenses.txt`; README has the full Legal section.
 
-**Not yet built (canonical list lives in README "Not yet built" §):** dedicated live tracking screen (the main screen doubles as it for now), ribbon fallback, offline tile manager, activity detail w/ elevation profile chart (MPAndroidChart dep is declared but unused), full stats dashboard (DAOs `aggregateBetween` / `aggregateByTypeBetween` are ready), crash-recovery dialog, GPX export wired to UI, automatic session start on detected motion.
+**Not yet built (canonical list lives in README "Not yet built" §):** dedicated live tracking screen (the main screen doubles as it for now), ribbon fallback, offline tile manager, activity detail w/ elevation profile chart, full stats dashboard, GPX export wired to UI, automatic session start on detected motion.
+
+## 1.16.1 durability model
+
+- Start immediately creates an in-progress Room row (`endTime = null`).
+- New points and the live summary flush transactionally every five seconds.
+- `ActiveSessionStore` reconnects sticky service recreation to the Room row.
+- MainActivity offers Resume / Finish & save for orphaned rows.
+- Stop finalizes on `Dispatchers.IO`; Summary opens only after completion and reloads from Room.
+- Diagnostic CSV generation runs in WorkManager after the activity is durable.
 
 ## Recent bug — persistActivity race (fixed in v1.14.1)
 
 In v1.14 (and silently for many versions before, masked by point loss producing only inert buttons rather than a hard error), `TrackingService.persistActivity` dispatched the two stop-time DB writes via `scope.launch { upsert; insertAll }`. The service then called `stopSelf()` → `onDestroy()` → `scope.cancel()`. Cancellation could land between the two suspend calls, persisting the activity row but losing every track point. Symptom on Summary: "View Map" and "Export CSV" both dead because both gate on `points.isNotEmpty()`. Fix: `runBlocking { db.withTransaction { upsert; insertAll } }` — synchronous + atomic. See CHANGELOG [1.14.1].
 
-**Recovery side path:** `DebugLog.log("FIX", ...)` writes every accepted fix to `Android/data/com.comtekglobal.tromp/files/autostop.log` (2 MB rolling cap). The most recent session, if still in the log, can be parsed into GPX/CSV with `recover_track_from_log.py` at the repo root. Older sessions that aged out are unrecoverable.
+The old coordinate-bearing `autostop.log` recovery path is retired. Diagnostics now live under `noBackupFilesDir`, are capped at 512 KiB, and omit coordinates.
 
 ## Gotchas worth keeping at the front of your mind
 
 - **Preserved-on-purpose `trektracker*` identifiers** (DB filename, channel ID, two SharedPreferences names, `TrekDatabase` class name). Don't rename — would orphan existing sideloaded installs. See CHANGELOG [1.12].
 - **`UnitPrefs` default is IMPERIAL**, not metric. Initial users are US-based. Internal storage is still SI; only display flips. Don't accidentally swap the default.
-- **`TrackPointEntity.speedMps` is still always written as `0f`** in the persist path. The data model has the field but `loc.speed` isn't carried through. No screen reads it today, but if a future stat needs per-point speed, plug it in at `TrackingSession.Point` → `TrackingService.persistActivity`.
+- **`TrackPointEntity.speedMps` is authoritative** for new recordings and is used by trim replay and classifier export.
 - **Auto-pause short-circuits the fix pipeline.** While `AutoPauseDetector` reports `PAUSED`, distance / ascent / grade / max-speed updates are skipped (snapshot still updates lat/lon/speed/marker). `auto-stop` keeps running since `RETURNED_HOME` actively wants the low-speed-near-start signal that an auto-pause produces. Don't restructure that without re-reading DESIGN.md §6.4.
 - **`movingMs` advances at 1 s resolution** (driven by the 1 Hz ticker). It's deliberately coarse — second-level resolution matches the elapsed-time display and avoids fix-rate-dependent drift. Don't switch to per-fix accumulation without thinking through pause boundaries.
-- **Background-location permission is declared but never requested.** Foreground service keeps the process alive with screen off, so it works without it on most devices, but background-prompted apps get more reliable wake on Android 14+. README documents this gap.
-- **DEM lookups are blocking `HttpURLConnection`** — keep them on `Dispatchers.IO`. Don't pull in OkHttp/Retrofit for two endpoints; the retry-once-with-750ms-backoff pattern in `DemClient.withRetry` is enough.
+- **No background-location permission is declared.** Tracking starts from a visible activity and continues in a location foreground service.
+- **DEM lookups are blocking `HttpURLConnection`** — keep them on `Dispatchers.IO`. USGS is primary; Open-Elevation is contacted only as a deadline-bounded fallback.
 - **osmdroid User-Agent** is set in `TrompApplication.onCreate` (`Tromp/<version> (+https://github.com/doxender/Tromp)`). Required by OSMF tile policy; if you ever fork, change it.
 
 ## Pre-publication checklist

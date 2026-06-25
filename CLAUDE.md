@@ -18,44 +18,43 @@ Single-module Gradle (Kotlin DSL) Android app. Requires `local.properties` with 
 - Clean: `./gradlew clean`
 - Primary workflow is Android Studio (File → Open → this folder → Gradle sync). The Gradle wrapper script (`gradlew`) is not checked in.
 
-Toolchain: AGP 8.13.2, Kotlin 1.9.24, JVM target 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. ViewBinding enabled (generated `ActivityMainBinding` lives in `com.comtekglobal.tromp.databinding`). KSP is enabled for Room's annotation processor.
+Toolchain: AGP 9.2.0, Kotlin 2.2.10, Gradle 9.4.1, JVM target 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. ViewBinding and KSP are enabled.
 
 ## Architecture
 
 Package root: `com.comtekglobal.tromp`. Layout follows DESIGN.md §4.1:
 
 ```
-service/     TrackingService (foreground, location|dataSync) + TrackingNotifier
-tracking/    GradeCalculator, AscentAccumulator, AutoPauseDetector, QnhCalibrator, TrackSnapshot
+service/     TrackingService (location FGS), TrackingNotifier, ActiveSessionStore
+tracking/    live calculators, SessionStatsCalculator, TrackSnapshot
 location/    LocationSource — FusedLocationProviderClient as a cold Flow<Location>
 sensors/     BarometerSource — TYPE_PRESSURE as a cold Flow<Float>
              StepCounterSource — TYPE_STEP_COUNTER as a cold Flow<Float>
-             CompassSource — TYPE_ROTATION_VECTOR → bearing-degrees Flow<Float>
 elevation/   DemClient — USGS 3DEP + Open-Elevation lookups (blocking; call from IO)
-export/      GpxWriter — GPX 1.1 serializer
+export/      GpxWriter, CsvWriter, DiagnosticExportWorker
 data/db/     Room entities, DAOs, TrekDatabase
 ui/main/     MainActivity — idle landing screen
 util/        Haversine, Units, Time
 ```
 
-### Implementation state (2026-05-05, v1.15.1)
+### Implementation state (2026-06-24, v1.16.1)
 
 For per-version detail see `CHANGELOG.md`; for current gotchas + state at-a-glance see `CONTEXT.md`. Brief tour:
 
 **Pure-logic core, all unit-tested**: `GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `AutoStopDetector`, `AutoStopTrimmer`, `QnhCalibrator`, `TrackPostProcessor`, `Haversine`, `Units`, `GpxWriter`. If you change their behavior, update the tests — they encode the subtle invariants and are the first line of defense.
 
-**Wired into the live pipeline**: `TrackingService` collects from `LocationSource` + `BarometerSource` + `StepCounterSource`, runs each accepted fix through accuracy filter → distance (Haversine) → ascent (`AscentAccumulator`) → grade (`GradeCalculator`) → auto-pause (`AutoPauseDetector`) → auto-stop (`AutoStopDetector`), emits `TrackSnapshot` via `StateFlow`, and on stop persists `ActivityEntity` + `TrackPointEntity` to Room. The 1 Hz ticker advances `elapsedMs` always and `movingMs` while not paused / auto-paused.
+**Wired into the live pipeline**: `TrackingService` collects location, barometer, and optional step data; emits `TrackSnapshot`; creates an in-progress Room row at Start; and flushes points/summary transactionally every five seconds. Sticky restart and MainActivity recovery reload the row and persisted points. Stop finalizes on IO and WorkManager generates diagnostic CSVs afterward.
 
 **UI shipped**: `MainActivity` (idle + live status + auto-stop dialog + settings dialog + Quick Start button + acquiring-fix banner), `BenchmarkActivity`, `CalibrationActivity`, `SummaryActivity`, `MapActivity` (osmdroid polyline), `HistoryActivity` (list with rename/delete), `BenchmarksActivity` (cache management), `LicensesActivity`. First-run safety disclaimer (`SafetyDisclaimer`) blocks until accepted.
 
-**Quick Start (v1.15.0)**: secondary path that skips the full benchmark — single 15 s acquisition (one fix + one baro reading + DEM lookup), or deferred-fix mode that starts tracking immediately and locks elevation when the first usable fix arrives. The deferred mode buffers timestamped baro samples (replayed through `AscentAccumulator` once QNH locks) and timestamped compass bearings (unconsumed in v1.x — placeholder for future dead-reckoning back-projection). Quick benchmarks are session-only and never written to the `known_location` cache or `BenchmarkSession` SharedPrefs. See CONTEXT.md for the implementation pointers.
+**Quick Start**: the one-fix/barometer/DEM attempt shares a 15-second budget. Deferred mode uses GPS altitude immediately when present, otherwise runs a bounded DEM attempt, and keeps a capped barometer buffer for ascent replay.
 
 **Not yet built** (canonical list lives in `README.md` "Not yet built"):
 - Dedicated live tracking screen (large metrics tiles, manual pause/resume button, waypoint drop) — main screen doubles as the live view for now.
 - Ribbon fallback view + offline tile manager.
 - Activity detail w/ elevation profile chart (MPAndroidChart dep declared, unused).
 - Stats dashboard (DAOs ready: `aggregateBetween`, `aggregateByTypeBetween`).
-- Crash-recovery dialog, GPX export wired to UI, auto-start (third of the auto-trio after auto-pause + auto-stop).
+- GPX export wired to UI and auto-start (third of the auto-trio after auto-pause + auto-stop).
 
 ### Runtime shape (target end state — §4.2 of DESIGN.md)
 
@@ -69,11 +68,11 @@ Crash recovery: service writes an active-session-id to SharedPreferences on star
 - **Palette is locked** (DESIGN.md §2.1). All colors live in `res/values/colors.xml`; don't hard-code hex in layouts or drawables. If you need a new color, add it there and reference it.
 - **The grade/ascent algorithms have subtle correctness requirements** — the rolling-window trimming in `GradeCalculator` and the hysteresis reversal logic in `AscentAccumulator` both have unit tests that encode the invariants (window must be full before reporting; noise below threshold must never commit to totals; direction reversal must reset anchor but not bank the pending delta). Changing these algorithms without updating the tests is how real data gets miscounted.
 - **No background location without a foreground service**. Android 8+ throttles background location to a handful of fixes per hour; a foreground service with an ongoing notification is the only sanctioned path to continuous GPS with the screen off. The notification channel is `IMPORTANCE_LOW` (no sound/vibration/heads-up) — keep it that way.
-- **Room `exportSchema = false`** for v1 since there's only one schema version and no migrations. Flip to `true` and add the kapt schema-location argument when the first migration lands.
+- **Room `exportSchema = true`** at schema v6. Preserve exported schemas and add tested migrations for every future version.
 - **DEM lookups are blocking HTTP** (hand-rolled `HttpURLConnection` in `DemClient`). Keep them that way — don't pull in OkHttp/Retrofit for two one-shot GETs. Always call from `Dispatchers.IO`.
 - **`kotlinx.coroutines.flow.callbackFlow`** is the chosen pattern for bridging Android callback APIs (`FusedLocationProviderClient`, `SensorManager`) into Flow. Stay consistent: new callback sources should follow the same shape as `LocationSource` / `BarometerSource`.
 - **osmdroid, not Google Maps**. This was an explicit decision (DESIGN.md Decision Log): osmdroid is the only map provider. The one Google Maps touchpoint is a `geo:` Intent on the activity detail screen ("View in external maps app"). Don't add the Google Maps SDK.
 
 ## Design decisions already resolved
 
-See DESIGN.md §11 Decision Log. In short: name "Tromp" (renamed from "TrekTracker" 2026-04-23; see CHANGELOG.md [1.12] for the list of internal identifiers — DB filename, notification channel ID, two SharedPreferences files, and the `TrekDatabase` class — kept at their `trektracker*` values so sideloaded installs stay upgradable); release keystore rotated to the Tromp identity on 2026-04-24 (CN=Tromp, alias=tromp); outdoor earth-tones dark palette; single 3 m ascent hysteresis; generic activity model with a type-label dropdown; full stats scope (date-range + per-type + YoY + PRs + distance/week bar chart); default name `"{type} · YYYY-MM-DD HH:MM"`. If the user asks to revisit any of these, update the Decision Log table in DESIGN.md so the doc doesn't drift from reality.
+See DESIGN.md §11 Decision Log. Preserved `trektracker*` storage identifiers remain part of the upgrade path. The original committed release key was retired in 1.16.1; signing material must remain outside Git and tagged releases must use protected CI secrets. Other locked decisions include the earth-tone palette, one 3 m ascent hysteresis, generic activity types, and default name `"{type} · YYYY-MM-DD HH:MM"`.

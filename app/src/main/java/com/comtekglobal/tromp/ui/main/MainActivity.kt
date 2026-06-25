@@ -68,6 +68,10 @@ class MainActivity : AppCompatActivity() {
     private var autoStopDialogShownFor: AutoStopDetector.Reason? = null
     private var quickStartJob: Job? = null
     private var quickStartDialog: AlertDialog? = null
+    private var stopAwaitJob: Job? = null
+    private var skipNotificationPrompt = false
+    private var skipActivityRecognitionPrompt = false
+    private var recoveryDialogShown = false
 
     /**
      * Full benchmark flow. On success we chain into calibration — and then,
@@ -107,7 +111,9 @@ class MainActivity : AppCompatActivity() {
         BenchmarkSession.load(this)
 
         if (!SafetyDisclaimer.hasAccepted(this)) {
-            SafetyDisclaimer.showBlocking(this) { /* nothing extra — user may now interact */ }
+            SafetyDisclaimer.showBlocking(this) { checkForRecovery() }
+        } else {
+            checkForRecovery()
         }
 
         binding.btnStart.setOnClickListener {
@@ -182,12 +188,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(body)
             .setCancelable(false)
             .setPositiveButton(R.string.autostop_end_trim) { _, _ ->
-                val stopIntent = Intent(this, TrackingService::class.java).apply {
-                    action = TrackingNotifier.ACTION_STOP
-                    putExtra(TrackingService.EXTRA_TRIM_AFTER_MS, trimAfterMs)
-                }
-                startService(stopIntent)
-                startActivity(Intent(this, SummaryActivity::class.java))
+                requestStopAndShowSummary(trimAfterMs)
             }
             .setNegativeButton(R.string.autostop_keep_going) { _, _ ->
                 val dismissIntent = Intent(this, TrackingService::class.java).apply {
@@ -235,7 +236,11 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifications()) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotifications() &&
+            !skipNotificationPrompt
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
@@ -243,7 +248,11 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasActivityRecognition()) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !hasActivityRecognition() &&
+            !skipActivityRecognitionPrompt
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
@@ -259,7 +268,7 @@ class MainActivity : AppCompatActivity() {
             val loc = LocationSource(this@MainActivity).lastKnown()
             DebugLog.log(
                 "START",
-                "lastKnown=${loc?.let { "lat=%.6f lon=%.6f".format(it.latitude, it.longitude) } ?: "null"}"
+                "lastKnown=${if (loc == null) "null" else "available"}"
             )
             if (loc == null) { showBenchmarkRequiredDialog(); return@launch }
             val cached = findNearestKnown(loc.latitude, loc.longitude, PROXIMITY_THRESHOLD_M)
@@ -291,7 +300,11 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifications()) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasNotifications() &&
+            !skipNotificationPrompt
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
@@ -299,7 +312,11 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasActivityRecognition()) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !hasActivityRecognition() &&
+            !skipActivityRecognitionPrompt
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
@@ -318,6 +335,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun showAcquiringDialog() {
         quickStartJob?.cancel()
+        val acquisitionStartedAt = android.os.SystemClock.elapsedRealtime()
         DebugLog.log("QSTART", "modal opened")
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.quick_start_acquiring_title)
@@ -350,7 +368,7 @@ class MainActivity : AppCompatActivity() {
             val baroHpa = baroDeferred.await()
             DebugLog.log(
                 "QSTART",
-                "modal results fix=${fix?.let { "lat=%.6f lon=%.6f acc=%.1f".format(it.latitude, it.longitude, it.accuracy) } ?: "null"} " +
+                "modal results fix=${fix?.let { "available acc=%.1f".format(it.accuracy) } ?: "null"} " +
                     "baroHpa=${baroHpa?.let { "%.2f".format(it) } ?: "null"}"
             )
 
@@ -361,8 +379,18 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Try to resolve elevation: DEM first, fall back to loc.altitude.
+            val remainingMs = (
+                QUICK_ACQUIRE_TIMEOUT_MS -
+                    (android.os.SystemClock.elapsedRealtime() - acquisitionStartedAt)
+                ).coerceAtLeast(1L)
             val dem = withContext(Dispatchers.IO) {
-                runCatching { DemClient.lookup(fix.latitude, fix.longitude) }.getOrNull()
+                runCatching {
+                    DemClient.lookup(
+                        fix.latitude,
+                        fix.longitude,
+                        timeoutMs = remainingMs,
+                    )
+                }.getOrNull()
             }
             val demElev = dem?.best
             val demSource = dem?.source
@@ -540,11 +568,65 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onStopClicked() {
+        requestStopAndShowSummary(trimAfterMs = null)
+    }
+
+    private fun requestStopAndShowSummary(trimAfterMs: Long?) {
+        stopAwaitJob?.cancel()
+        stopAwaitJob = lifecycleScope.launch {
+            val activityId = TrackingService.completedActivities.first()
+            startActivity(SummaryActivity.intent(this@MainActivity, activityId))
+        }
         val stopIntent = Intent(this, TrackingService::class.java).apply {
             action = TrackingNotifier.ACTION_STOP
+            trimAfterMs?.let { putExtra(TrackingService.EXTRA_TRIM_AFTER_MS, it) }
         }
         startService(stopIntent)
-        startActivity(Intent(this, SummaryActivity::class.java))
+    }
+
+    private fun checkForRecovery() {
+        if (recoveryDialogShown || TrackingService.snapshots.value != null) return
+        lifecycleScope.launch {
+            val orphan = withContext(Dispatchers.IO) {
+                TrekDatabase.get(this@MainActivity).activities().findOrphaned()
+            } ?: return@launch
+            if (TrackingService.snapshots.value != null || recoveryDialogShown) return@launch
+            recoveryDialogShown = true
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle(R.string.recovery_title)
+                .setMessage(
+                    getString(
+                        R.string.recovery_body,
+                        com.comtekglobal.tromp.util.formatLocalIsoMinute(orphan.startTime),
+                    )
+                )
+                .setPositiveButton(R.string.recovery_resume) { _, _ ->
+                    ContextCompat.startForegroundService(
+                        this@MainActivity,
+                        Intent(this@MainActivity, TrackingService::class.java).apply {
+                            action = TrackingService.ACTION_RESUME_SESSION
+                            putExtra(TrackingService.EXTRA_ACTIVITY_ID, orphan.id)
+                        },
+                    )
+                }
+                .setNegativeButton(R.string.recovery_finish) { _, _ ->
+                    stopAwaitJob?.cancel()
+                    stopAwaitJob = lifecycleScope.launch {
+                        val activityId = TrackingService.completedActivities.first()
+                        startActivity(
+                            SummaryActivity.intent(this@MainActivity, activityId)
+                        )
+                    }
+                    startService(
+                        Intent(this@MainActivity, TrackingService::class.java).apply {
+                            action = TrackingService.ACTION_FINISH_ORPHAN
+                            putExtra(TrackingService.EXTRA_ACTIVITY_ID, orphan.id)
+                        },
+                    )
+                }
+                .setOnDismissListener { recoveryDialogShown = false }
+                .show()
+        }
     }
 
     private fun hasFineLocation(): Boolean =
@@ -570,13 +652,25 @@ class MainActivity : AppCompatActivity() {
         val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
         when (requestCode) {
             REQ_FINE_LOCATION -> if (granted) onStartClicked()
-            REQ_NOTIFICATIONS -> if (granted) onStartClicked()
+            REQ_NOTIFICATIONS -> {
+                skipNotificationPrompt = !granted
+                onStartClicked()
+            }
             // Activity recognition is optional: if the user denies, tracking still
             // proceeds; the summary just won't include a stride figure.
-            REQ_ACTIVITY_RECOGNITION -> onStartClicked()
+            REQ_ACTIVITY_RECOGNITION -> {
+                skipActivityRecognitionPrompt = !granted
+                onStartClicked()
+            }
             REQ_FINE_LOCATION_QUICK -> if (granted) onQuickStartClicked()
-            REQ_NOTIFICATIONS_QUICK -> if (granted) onQuickStartClicked()
-            REQ_ACTIVITY_RECOGNITION_QUICK -> onQuickStartClicked()
+            REQ_NOTIFICATIONS_QUICK -> {
+                skipNotificationPrompt = !granted
+                onQuickStartClicked()
+            }
+            REQ_ACTIVITY_RECOGNITION_QUICK -> {
+                skipActivityRecognitionPrompt = !granted
+                onQuickStartClicked()
+            }
         }
     }
 

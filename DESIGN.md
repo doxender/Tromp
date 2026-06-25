@@ -63,8 +63,8 @@ Includes a GPS-averaging benchmark acquisition flow and barometer calibration fl
 
 ### 1.6 Constraints
 - Target: Android 8.0+ (minSdk 26), compileSdk/targetSdk 34.
-- Kotlin only; toolchain AGP 8.13.2, Kotlin 1.9.24, JVM 17.
-- Permissions required: `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS` (Android 13+), `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` (Android 14+).
+- Kotlin only; toolchain AGP 9.2.0, Kotlin 2.2.10, Gradle 9.4.1, JVM 17.
+- Permissions required: `ACCESS_FINE_LOCATION`, `INTERNET`, `ACCESS_NETWORK_STATE`, optional `POST_NOTIFICATIONS` / `ACTIVITY_RECOGNITION`, `FOREGROUND_SERVICE`, and `FOREGROUND_SERVICE_LOCATION`.
 - OSM tile usage: default `tile.openstreetmap.org` is acceptable for personal use with a proper `User-Agent`; swap to Mapbox/MapTiler later if the user base grows (one-line change in osmdroid tile source).
 
 ### 1.7 Out of Scope (v1)
@@ -123,11 +123,10 @@ Track polyline on map: `#52B788` with 70% opacity, 4 dp stroke. Ribbon fallback 
 ## 3. User Flows
 
 ### 3.1 First launch (onboarding)
-1. Splash → brief screen explaining the three permissions and why.
+1. Splash → brief screen explaining permissions and why.
 2. Request `ACCESS_FINE_LOCATION`.
-3. Educational screen for background location → request `ACCESS_BACKGROUND_LOCATION`.
-4. Request `POST_NOTIFICATIONS` (Android 13+).
-5. Land on Main screen.
+3. Optionally request `POST_NOTIFICATIONS` and `ACTIVITY_RECOGNITION`.
+4. Land on Main screen.
 
 ### 3.2 Main screen (idle)
 - Big **START** button.
@@ -222,7 +221,7 @@ app/
 ```
 
 ### 4.2 Runtime shape
-- **`TrackingService`** (foreground, `foregroundServiceType="location|dataSync"`) owns the active `TrackSession`. It receives location + barometer callbacks, feeds the derived-state computations, emits updates via a `StateFlow<TrackSnapshot>` that the UI observes (bound service), and flushes to Room every N seconds.
+- **`TrackingService`** (foreground, `foregroundServiceType="location"`) owns the active `TrackSession`. It receives location + barometer callbacks, feeds derived-state computations, emits a `StateFlow<TrackSnapshot>`, and flushes to Room every five seconds.
 - UI layer uses ViewModels holding `StateFlow`s connected to the service (for live screens) or to Room directly (for history / detail / stats / settings).
 - **Crash recovery**: service writes `active_session_id` to SharedPreferences on start, clears on clean stop. On launch, if the key is set and the corresponding session row has no `end_time`, offer recovery.
 
@@ -366,8 +365,8 @@ Haversine between successive accepted fixes, with the accuracy filter rejecting 
 | Permission | When requested | Blocks feature if denied |
 |---|---|---|
 | `ACCESS_FINE_LOCATION` | First START | All tracking |
-| `ACCESS_BACKGROUND_LOCATION` | After FINE granted, with educational screen | Pocket / screen-off tracking |
-| `POST_NOTIFICATIONS` (API 33+) | Before first foreground service start | Ongoing notification (required to show the service) |
+| `POST_NOTIFICATIONS` (API 33+) | Before first foreground service start | No; Android still permits the foreground service |
+| `ACTIVITY_RECOGNITION` (API 29+) | Before first tracking session | No; step/stride data only |
 | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` | Manifest-only, auto-granted | — |
 | `INTERNET`, `ACCESS_NETWORK_STATE` | Manifest-only | DEM lookups, online map tiles |
 
@@ -378,7 +377,7 @@ Haversine between successive accepted fixes, with the accuracy filter rejecting 
 - No GPS fix after 60 s of START: show "Still searching for GPS…" warning, keep trying.
 - Barometer absent: Calibrate button disabled; elevation uses GPS; clearly indicated in UI.
 - DEM lookup fails during benchmark: proceed with whichever source succeeded, or GPS mean if both fail.
-- User denies background location: warn that tracking will stop when the screen locks; offer "Track with screen on only" mode.
+- User denies notification or activity-recognition permission: continue tracking; notification visibility or step/stride data is reduced.
 - Clock jump (time-zone change, NTP correction): durations use `SystemClock.elapsedRealtime()`, not wall clock.
 - OSM tile server unreachable: show cached tiles where available, otherwise route to fallback ribbon view.
 - Zero-point activity (user starts and stops immediately): discard on save; don't litter history.
@@ -388,9 +387,9 @@ Haversine between successive accepted fixes, with the accuracy filter rejecting 
 
 ## 10. Testing Strategy
 
-- **Unit tests** (JUnit + Kotlin): `GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `QnhCalibrator`, `Haversine`, `GpxWriter`. Pure logic, failure-prone, cheap.
-- **Manual on-device**: everything else. Maintain a test protocol doc (e.g., "walk a known 1 km loop, verify distance is within 5% of Google Fit").
-- No instrumentation or UI tests in v1.
+- **Unit tests** (JUnit + Kotlin): live calculators, trim/recovery replay, DEM fallback routing, units, Haversine, and serializers.
+- **Instrumentation tests**: Room migrations and foreground-service/recovery lifecycle.
+- **Manual on-device**: walk a known loop, kill/restart the process mid-track, deny optional permissions, and verify background/screen-off recording.
 
 ---
 
@@ -406,5 +405,6 @@ All initial open questions resolved 2026-04-19.
 | 4 | Activity type in v1 | Single generic model with a type-label dropdown (Hike / Run / Bike / Walk / Other); all types tracked identically |
 | 5 | Stats scope in v1 | Full: date-range tiles + per-type breakdowns + year-over-year comparison + personal records + distance-per-week bar chart |
 | 6 | Default activity name | `"{type} · YYYY-MM-DD HH:MM"` — e.g. `"Hike · 2026-04-19 14:32"` |
+| 7 | Release signing | Private keys and passwords never enter Git. Local signing uses private Gradle properties; tag CI uses protected secrets. The pre-1.16 committed key is retired as compromised. |
 
 The doc is now a build spec. Scaffolding next.

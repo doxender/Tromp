@@ -43,7 +43,6 @@
     <string name="benchmarks_delete_confirm_title">Delete benchmark?</string>
     <string name="benchmarks_delete_confirm_body">This removes the cached elevation. You\'ll need a fresh 60 s benchmark at this spot next time.</string>
     <string name="benchmarks_unnamed">Unnamed</string>
-    <string name="benchmarks_coords">%1$.2f, %2$.2f</string>
 
     <string name="activity_rename">Rename</string>
     <string name="activity_delete">Delete</string>
@@ -97,6 +96,15 @@
     <string name="notif_channel_tracking_desc">Ongoing notification shown while an activity is being recorded.</string>
     <string name="notif_tracking_title">Tromp</string>
     <string name="notif_tracking_body_idle">Recording…</string>
+    <string name="notif_tracking_recovering">Recovering activity…</string>
+    <string name="notif_tracking_saving">Saving activity…</string>
+    <string name="notif_tracking_save_failed">Save failed — tap Stop to retry.</string>
+
+    <string name="recovery_title">Unfinished activity</string>
+    <string name="recovery_body">Tromp found an activity started at %1$s. Resume recording or finish it with the points already saved?</string>
+    <string name="recovery_resume">Resume</string>
+    <string name="recovery_finish">Finish &amp; save</string>
+    <string name="summary_no_data">No activity data.</string>
 
     <string name="osm_attribution">© OpenStreetMap contributors</string>
 

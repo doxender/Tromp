@@ -3,7 +3,6 @@
 // This notice must be preserved in all derivative works.
 package com.comtekglobal.tromp.ui.history
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -13,13 +12,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.room.withTransaction
 import com.comtekglobal.tromp.R
 import com.comtekglobal.tromp.data.db.ActivityEntity
 import com.comtekglobal.tromp.data.db.TrekDatabase
 import com.comtekglobal.tromp.databinding.ActivityHistoryBinding
 import com.comtekglobal.tromp.databinding.ItemActivityRowBinding
-import com.comtekglobal.tromp.tracking.TrackSnapshot
-import com.comtekglobal.tromp.tracking.TrackingSession
 import com.comtekglobal.tromp.ui.summary.SummaryActivity
 import com.comtekglobal.tromp.util.DistanceUnit
 import com.comtekglobal.tromp.util.UnitPrefs
@@ -97,51 +95,7 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun openActivity(activity: ActivityEntity) {
-        val db = TrekDatabase.get(this)
-        lifecycleScope.launch {
-            val points = withContext(Dispatchers.IO) {
-                db.trackPoints().forActivity(activity.id)
-            }
-            TrackingSession.reset()
-            TrackingSession.lastSnapshot = TrackSnapshot(
-                activityId = activity.id,
-                type = activity.type,
-                isPaused = false,
-                isAutoPaused = false,
-                lat = null, lon = null, elevationM = null,
-                horizontalAccuracyM = null, speedMps = 0.0,
-                totalDistanceM = activity.totalDistanceM,
-                totalAscentM = activity.totalAscentM,
-                totalDescentM = activity.totalDescentM,
-                currentGradePct = null,
-                maxGradePct = activity.maxGradePct,
-                minGradePct = activity.minGradePct,
-                avgSpeedMps = activity.avgSpeedMps,
-                maxSpeedMps = activity.maxSpeedMps,
-                elapsedMs = activity.elapsedMs,
-                movingMs = activity.movingMs,
-                pressureHpa = null,
-                qnhHpa = activity.qnhHpa,
-                stepCount = activity.stepCount,
-            )
-            points.forEach {
-                TrackingSession.append(
-                    TrackingSession.Point(
-                        lat = it.lat, lon = it.lon,
-                        elevM = it.altM,
-                        gpsElevM = it.gpsAltM,
-                        pressureHpa = it.pressureHpa,
-                        horizAccM = it.horizAccM,
-                        speedMps = it.speedMps,
-                        bearingDeg = it.bearingDeg,
-                        cumStepCount = it.cumStepCount,
-                        isAutoPaused = it.isAutoPaused,
-                        tMs = it.time,
-                    )
-                )
-            }
-            startActivity(Intent(this@HistoryActivity, SummaryActivity::class.java))
-        }
+        startActivity(SummaryActivity.intent(this, activity.id))
     }
 
     private fun showRenameDialog(activity: ActivityEntity) {
@@ -175,11 +129,17 @@ class HistoryActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) {
                         val db = TrekDatabase.get(this@HistoryActivity)
-                        // Manual cascade: track_point and waypoint don't declare
-                        // foreign keys, so we need to clear them explicitly.
-                        db.trackPoints().deleteForActivity(activity.id)
-                        db.waypoints().deleteForActivity(activity.id)
-                        db.activities().deleteById(activity.id)
+                        db.withTransaction {
+                            db.trackPoints().deleteForActivity(activity.id)
+                            db.waypoints().deleteForActivity(activity.id)
+                            db.activities().deleteById(activity.id)
+                        }
+                        com.comtekglobal.tromp.export.CsvExportFiles
+                            .forActivity(this@HistoryActivity, activity.id)
+                            .let {
+                                it.preTrim.delete()
+                                it.postTrim.delete()
+                            }
                     }
                     loadData()
                 }

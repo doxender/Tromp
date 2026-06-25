@@ -2,6 +2,56 @@
 
 All notable changes to **Tromp** (previously **TrekTracker**) are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.16.1] — 2026-06-24
+
+Foundations release implementing the reliability, privacy, security, and
+documentation findings from the June 2026 ownership review.
+
+### Added
+- **Durable active sessions.** Tracking creates an `ActivityEntity` at Start
+  and flushes new points plus the live summary to Room every five seconds.
+- **Crash recovery.** Sticky service recreation restores the Room row and
+  points; app launch offers **Resume** or **Finish & save** for an orphan.
+- **`SessionStatsCalculator`** replays persisted/trimmed points into a complete
+  set of mutually-consistent totals.
+- **`DiagnosticExportWorker`** moves CSV generation out of the service stop
+  path.
+- CI now runs unit tests, full debug lint, and a debug build before publishing
+  artifacts. Signed APKs are produced only for tags using protected secrets.
+
+### Fixed
+- Stop waits for the Room transaction before opening Summary, which reloads
+  the completed activity from Room.
+- Auto-stop replaces in-memory and persisted points and recomputes all summary
+  values from the kept route.
+- Duplicate Start requests no longer reset an active session.
+- Denying optional notification or activity-recognition permission no longer
+  loops or blocks tracking.
+- Open-Elevation is now a true deadline-bounded fallback after USGS.
+- Deferred Quick Start uses GPS altitude immediately and caps barometer memory.
+- Location-provider request failures close the location Flow.
+- Activity deletion is transactional and removes generated CSV files.
+- Visible OSM attribution was added; full lint no longer hits the benchmark
+  coordinate-format false positive.
+
+### Security / Privacy
+- Removed committed signing keystores and hardcoded passwords. Local and CI
+  signing now use external Gradle properties/secrets. The public pre-1.16 key
+  is compromised; 1.16.1 uses a new key, so old installs require one
+  uninstall/reinstall.
+- Android backup is disabled for precise location data.
+- Removed unused background-location and data-sync foreground-service
+  declarations.
+- Diagnostics moved to `noBackupFilesDir`, were reduced to 512 KiB, and no
+  longer record exact coordinates. Location artifacts are ignored by Git.
+
+### Changed
+- Stop-time Room and CSV work no longer blocks the service main thread.
+- The tracking foreground service declares only the `location` type.
+- Version `1.15.1` / code `19` → `1.16.1` / code `20`.
+- README, DESIGN, CLAUDE, and CONTEXT now match the actual AGP 9.2.0 / Kotlin
+  2.2.10 / Gradle 9.4.1 / Room schema v6 project.
+
 ## [1.15.1] — Unreleased
 
 Diagnostic plumbing for the hike / clamber / dawdle classifier. Dan reported the v1.15.0 hike "looked pretty good" — encouraging signal that the rule shape is close, but we're still in the threshold-tuning phase. This release adds the classifier itself plus the data-export flow needed to validate it against real recordings, **without** touching activity totals, the map polyline, or persisting state to Room. Once the rule's calibrated against a few real hikes, the full rollout in `CONTEXT.md` "Pending discussion" items 1–9 lands as a separate change.
@@ -112,7 +162,7 @@ Rename from TrekTracker to Tromp.
 - `versionCode` 12 → 13, `versionName` `1.11` → `1.12`.
 
 ### Rotated to Tromp identity
-- **Release keystore** rotated on 2026-04-24 to `CN=Tromp, alias=tromp, password=tromp2026`. Done while the install base was effectively one device, so the unavoidable break of the signing-key continuity (Android refuses to update an app signed by a different key) cost a single uninstall+reinstall. The pre-rotation keystore is archived at `app/release.keystore.trektracker.bak` and must never be reused — any APK signed with it cannot upgrade one signed with the current keystore.
+- **Release keystore** rotated on 2026-04-24 to the Tromp identity. Done while the install base was effectively one device, so the unavoidable break of signing-key continuity cost a single uninstall/reinstall. This key was later retired as compromised in 1.16.1.
 
 ### Preserved deliberately (to keep existing installs upgradable without data loss)
 - **SQLite database filename** (`trektracker.db` in `TrekDatabase.kt`). Renaming it would make every existing install appear to have no history.
@@ -128,7 +178,7 @@ Work on branch `ci-workflow` — CI builds, release signing, and install-from-Gi
 
 ### Added
 - **GitHub Actions build workflow** at `.github/workflows/build.yml`. Every push (any branch) builds a signed release APK and uploads it as a 90-day artifact; tag pushes matching `v*` additionally attach the APK to an auto-generated GitHub Release with generated release notes.
-- **Committed release keystore** at `app/release.keystore` (RSA 4096, 100-year cert), with passwords in `app/build.gradle.kts`. Lets every rebuild produce a byte-identical signed APK so updates install over each other without wiping data. Clearly labeled in the README as side-loading-only — not for Play Store distribution.
+- **Historical release signing approach:** this version committed signing material so independently built APKs shared an update identity. That approach was retired in 1.16.1 because publishing a private key makes the update channel forgeable.
 - **Install instructions in the README** pointing at the Releases page and the Actions artifacts list.
 
 ### Changed

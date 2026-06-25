@@ -26,6 +26,7 @@ import com.comtekglobal.tromp.util.formatLocalIsoMinute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 /**
  * Settings → Manage benchmarks. Lists the cached known_location rows in MRU
@@ -147,8 +148,9 @@ private class BenchmarksAdapter(
         fun bind(row: KnownLocationEntity, unit: DistanceUnit) {
             val ctx = b.root.context
             b.txtName.text = row.name ?: ctx.getString(R.string.benchmarks_unnamed)
+            val coordinates = String.format(Locale.US, "%.2f, %.2f", row.lat, row.lon)
             b.txtMeta.text = "%s · %s · %s".format(
-                ctx.getString(R.string.benchmarks_coords, row.lat, row.lon),
+                coordinates,
                 formatElevation(row.elevM, unit.elevationUnit(), 2),
                 row.source,
             )

@@ -4,6 +4,21 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+fun secret(name: String): String? =
+    providers.gradleProperty(name).orNull
+        ?: providers.environmentVariable(name).orNull
+
+val releaseKeystorePath = secret("TROMP_KEYSTORE_PATH")
+val releaseKeystorePassword = secret("TROMP_KEYSTORE_PASSWORD")
+val releaseKeyAlias = secret("TROMP_KEY_ALIAS")
+val releaseKeyPassword = secret("TROMP_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.comtekglobal.tromp"
     compileSdk = 34
@@ -12,40 +27,27 @@ android {
         applicationId = "com.comtekglobal.tromp"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.15.1"
+        versionCode = 20
+        versionName = "1.16.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Release signing. The keystore (app/release.keystore) and its passwords
-    // are committed to the repo on purpose — this is a personal side-loaded
-    // app, not a Play Store build, so there's nothing to protect. Anyone who
-    // rebuilds from source gets a byte-identical signed APK, which lets
-    // updates install over existing installs without wiping data. Do NOT
-    // reuse this keystore for anything you'd ship to Google Play.
-    //
-    // Keystore rotated 2026-04-24 from the original TrekTracker-era keystore
-    // (CN=TrekTracker, alias=trektracker, password=trekRelease2026) to the
-    // current Tromp identity (CN=Tromp, alias=tromp, password=tromp2026).
-    // The rotation was done while the install base was effectively just one
-    // device, so the upgrade-path break was trivial. The pre-rotation
-    // keystore is archived at app/release.keystore.trektracker.bak — never
-    // reuse it; any APK signed with it cannot upgrade an APK signed with
-    // the current keystore (Android enforces signing-key continuity).
     signingConfigs {
-        create("release") {
-            storeFile = file("release.keystore")
-            storePassword = "tromp2026"
-            keyAlias = "tromp"
-            keyPassword = "tromp2026"
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
     compileOptions {

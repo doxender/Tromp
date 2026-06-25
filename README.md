@@ -1,10 +1,13 @@
 # Tromp
 
-_(Renamed from **TrekTracker** on 2026-04-23 — Play Store applicationId is now `com.comtekglobal.tromp`. The SQLite database filename, notification channel ID, and SharedPreferences file names were intentionally kept as their historical `trektracker*` values so existing side-loaded installs can update without wiping user data; the release keystore was rotated to a fresh Tromp identity on 2026-04-24. See [CHANGELOG.md](CHANGELOG.md) and the Decision Log for why.)_
+_(Renamed from **TrekTracker** on 2026-04-23. Historical `trektracker*`
+storage identifiers remain so existing data is readable.)_
 
-**Version 1.15.1** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+**Version 1.16.1** — see [CHANGELOG.md](CHANGELOG.md) for release history.
 
-Android activity tracker for hikes, runs, walks, and rides. Records position, elevation, distance, climb/descent, grade, and waypoints. Maps the track over OpenStreetMap; falls back to a 2D elevation-colored ribbon view when no tiles are cached. Presents per-activity detail and aggregate stats over user-selected date ranges.
+Android activity tracker for hikes and walks. Records position, elevation,
+distance, climb/descent, grade, speed, and steps; stores the route locally; and
+maps completed tracks over OpenStreetMap.
 
 Includes a benchmarking function so live altitude can be read from the barometer instead of GPS.
 
@@ -14,20 +17,34 @@ Includes a benchmarking function so live altitude can be read from the barometer
 
 ## Installing
 
-Every push to this repo builds a signed release APK via GitHub Actions. Grab it one of two ways:
+Every push and pull request runs tests, full lint, and a debug build. Signed
+release APKs are produced only from verified `v*` tags.
 
 - **Tagged release** (recommended for everyday use): open the [Releases page](../../releases) and download `app-release.apk` from the latest `v*` tag. Each tag push attaches an APK automatically.
-- **Latest build of any branch**: open the [Actions tab](../../actions), click the most recent successful run, and download the `tromp-…` artifact (zip) from the bottom of the run page. Retained for 90 days.
+- **Latest branch build**: open the [Actions tab](../../actions) and download
+  the `tromp-debug-…` artifact. Debug builds do not update a release install.
 
 Install on-device:
 
 1. Download the APK on your Android phone (Chrome, Files, whatever).
 2. Open the file. Android will prompt to allow installs from this source — grant it for the app you downloaded it with.
-3. Tap Install. Subsequent versions install over the existing one without wiping data, because all APKs from this repo are signed with the same committed keystore.
+3. Tap Install.
+
+> **1.16.1 signing transition:** the old private key was committed publicly and
+> is therefore retired. An install signed with the old key must be uninstalled
+> once before installing 1.16.1. Export anything you need before uninstalling.
 
 ### About the release keystore
 
-`app/release.keystore` is **intentionally committed** to this repo along with its passwords (in `app/build.gradle.kts`). This is a personal, side-loaded app — not a Play Store build — so there's nothing to protect. The upside is that anyone can rebuild from source and produce a byte-identical signed APK that installs as an update to the official one. **Do not reuse this keystore for anything you'd ship on Google Play.**
+Private keys and passwords are never stored in Git. Local release builds read:
+
+- `TROMP_KEYSTORE_PATH`
+- `TROMP_KEYSTORE_PASSWORD`
+- `TROMP_KEY_ALIAS`
+- `TROMP_KEY_PASSWORD`
+
+from private Gradle properties or environment variables. Tagged CI releases
+use GitHub secrets with the same names (plus base64 key material).
 
 ## Status
 
@@ -36,13 +53,20 @@ Install on-device:
 - **Benchmarking** — a short pre-session flow that establishes a base elevation (from DEM lookup and GPS averaging) and calibrates the barometer to that elevation, so live altitude during tracking comes from the barometer instead of GPS.
 - **Quick Start** — secondary "Quick Start" button below the main START. Skips the full 60 s benchmark for users in a hurry: takes one GPS fix + one barometer reading + one DEM lookup within a 15 s window and starts tracking with whatever it can lock. If the window times out without a usable fix or elevation, offers a deferred-fix mode — tracking starts immediately and the start point is set the moment the first fix arrives, with retroactive ascent computed from buffered barometer samples. Quick benchmarks are session-only and aren't written to the cache.
 - **Record an activity** — foreground-service tracking via `FusedLocationProviderClient`. Distance via haversine, ascent/descent via the 3 m-hysteresis accumulator from DESIGN.md §6.1. Live duration + totals on the main screen and in the ongoing notification.
+- **Durable recording + recovery** — the active summary and new points flush
+  to Room every five seconds. Process/service recreation resumes automatically;
+  app launch offers Resume or Finish & save for an orphaned activity.
 - **Stop + Summary** — final totals (duration, distance, ascent/descent, avg/max speed, point count) with a button to view the track on an OpenStreetMap polyline (osmdroid).
 - **History** — every completed activity is persisted to Room (`activity` + `track_point` tables). Main-screen clock icon opens a list with an all-time totals header. Tap an entry to reopen its Summary + Map.
-- **CSV export (diagnostic)** — every stop auto-writes two CSVs to `Android/data/com.comtekglobal.tromp/files/exports/`: `tromp-<activityId>-pretrim.csv` (every fix) and `tromp-<activityId>-posttrim.csv` (rows classified DAWDLING dropped). Both carry `state` + `state_reason` + four `window_*` diagnostic columns from `TrackPostProcessor` (15 s rolling window, hike/clamber/dawdle classifier; thresholds tunable via the constants in the file). The Export CSV button on Summary shares both via the system share sheet (ACTION_SEND_MULTIPLE). Activity totals and the map polyline are NOT yet trimmed against the classifier — that rollout waits until the rule's calibrated against real recordings.
+- **CSV export (diagnostic)** — after Stop, WorkManager generates pretrim and
+  posttrim classifier CSVs. Summary can regenerate/share them on demand.
 
 ### Pure-logic core (unit-tested)
 
-`GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`, `QnhCalibrator`, `Haversine`, `Units`, `GpxWriter`. These encode the subtle correctness requirements (window-trimming, hysteresis reversal, etc.) and are the first line of defense against data-integrity regressions. Run them with `./gradlew :app:testDebugUnitTest`.
+`GradeCalculator`, `AscentAccumulator`, `AutoPauseDetector`,
+`AutoStopDetector`, `AutoStopTrimmer`, `SessionStatsCalculator`,
+`TrackPostProcessor`, `QnhCalibrator`, `DemClient` fallback routing,
+`Haversine`, `Units`, and `GpxWriter`.
 
 ### Not yet built
 
@@ -50,7 +74,7 @@ Install on-device:
 - Ribbon fallback view + offline tile manager.
 - Activity detail with elevation profile chart (MPAndroidChart).
 - Full stats dashboard — date-range tiles, per-type breakdowns, YoY, personal records, distance-per-week bar chart. The Room aggregate queries (`aggregateBetween`, `aggregateByTypeBetween`) already exist to back these.
-- Crash-recovery dialog, settings UI, GPX export wired to the UI.
+- GPX export wired to the UI.
 - Auto start — automatic session start based on detected motion (auto-stop is shipped; auto-pause is shipped; auto-start is the missing third).
 
 ## Architecture
@@ -58,13 +82,13 @@ Install on-device:
 Single-module Android app, package root `com.comtekglobal.tromp`:
 
 ```
-service/     TrackingService (foreground, location|dataSync) + TrackingNotifier
+service/     TrackingService (location foreground service), ActiveSessionStore
 tracking/    GradeCalculator, AscentAccumulator, AutoPauseDetector, QnhCalibrator,
              TrackSnapshot, BenchmarkSession, TrackingSession
 location/    LocationSource — FusedLocationProviderClient as a cold Flow<Location>
 sensors/     BarometerSource — TYPE_PRESSURE as a cold Flow<Float>
 elevation/   DemClient — USGS 3DEP + Open-Elevation one-shot GETs
-export/      GpxWriter — GPX 1.1 serializer
+export/      GPX/CSV serializers + DiagnosticExportWorker
 data/db/     Room entities, DAOs, TrekDatabase
 ui/main/     MainActivity (start/stop toggle, history + benchmark entry points)
 ui/benchmark/         BenchmarkActivity
@@ -79,35 +103,41 @@ Distances are stored in meters, times in milliseconds, speeds in m/s. Conversion
 
 ## Build & run
 
-Gradle (Kotlin DSL), AGP 8.13.2, Kotlin 1.9.24, JVM 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. The wrapper script isn't checked in — use Android Studio (File → Open → this folder → Gradle sync) or an installed Gradle 8.13.
+Gradle (Kotlin DSL), AGP 9.2.0, Kotlin 2.2.10, Gradle 9.4.1,
+JVM 17, `compileSdk`/`targetSdk` 34, `minSdk` 26. The wrapper script is not
+checked in; use Android Studio or an installed Gradle 9.4.1.
 
 Required: `local.properties` with `sdk.dir=<path to Android SDK>` for CLI builds.
 
 ```bash
 # Build + install the debug APK to a connected device
-./gradlew :app:installDebug
+gradle :app:installDebug
 
 # Assemble only
-./gradlew :app:assembleDebug
+gradle :app:assembleDebug
 
 # Run the pure-logic unit tests (no device needed)
-./gradlew :app:testDebugUnitTest
+gradle :app:testDebugUnitTest :app:lintDebug
 ```
 
 ## Permissions
 
 Declared in `AndroidManifest.xml`:
 
-- `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION` — GPS during tracking.
-- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `FOREGROUND_SERVICE_DATA_SYNC` — required on Android 14+ for a continuous-location foreground service.
-- `POST_NOTIFICATIONS` — Android 13+ ongoing tracking notification.
+- `ACCESS_FINE_LOCATION` — GPS during tracking.
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` — continuous tracking.
+- `POST_NOTIFICATIONS` — optional notification-drawer visibility on Android 13+.
+- `ACTIVITY_RECOGNITION` — optional step/stride data.
 - `INTERNET`, `ACCESS_NETWORK_STATE` — DEM lookups and online OSM tiles.
 
-The app prompts for fine location + notifications on first Start; background location is not yet requested (the foreground service keeps the process alive with the screen off).
+Fine location is required. Notification and activity-recognition denial does
+not prevent recording.
 
 ## Related files
 
 - `DESIGN.md` — authoritative spec.
+- `MAINTAINERS.md` — technical stewardship and legal ownership.
+- `SIGNING.md` — release certificate identity and secret configuration.
 - `CLAUDE.md` — guidance for Claude Code sessions working on this repo (build commands, conventions, scaffold status).
 - `.claude/settings.json` — project-scoped permission allowlist for read-only bash/adb commands.
 
@@ -141,7 +171,13 @@ Tromp has no affiliation with, endorsement from, or control over any of these se
 
 ### Privacy and data handling
 
-Tromp stores activity data (position, elevation, time, and any waypoints you record) on-device only, in the app's private storage. The developer does not operate a backend, does not collect telemetry, and does not receive your activity data. When the app is online, coordinates are sent to the third-party elevation and tile services listed above solely to retrieve elevation values and map imagery; those services see the request IP and the coordinates being queried. Uninstalling the app removes all locally stored data.
+Tromp stores activity data in app-private storage and disables Android backup
+for that data. The developer operates no backend and receives no telemetry.
+USGS receives coordinates for elevation lookup; Open-Elevation receives them
+only if USGS fails; OpenStreetMap receives tile requests for viewed map areas.
+Deleting an activity removes its Room rows and generated CSVs. Copies already
+shared to another app are outside Tromp's control. Uninstalling removes the
+remaining local app data.
 
 A formal privacy policy will be published alongside any Google Play listing.
 

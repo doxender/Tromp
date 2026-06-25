@@ -13,10 +13,8 @@ import java.util.TimeZone
 
 /**
  * Best-effort diagnostic logger that appends timestamped lines to
- * `<externalFilesDir>/autostop.log`. Readable from the device's Files app
- * under `Android/data/com.comtekglobal.tromp/files/autostop.log`, so the user can
- * pull it off the phone without adb. Kept tiny and synchronous — per-fix
- * overhead is a single open/append/close, which is fine at ≤ 1 Hz fix rate.
+ * `<noBackupFilesDir>/diagnostics/autostop.log`. The log is deliberately
+ * excluded from Android backup and no longer records exact coordinates.
  *
  * Call [init] once (safe to call multiple times) before logging.
  */
@@ -24,7 +22,7 @@ object DebugLog {
 
     private const val TAG = "DebugLog"
     private const val FILE_NAME = "autostop.log"
-    private const val MAX_BYTES: Long = 2L * 1024L * 1024L   // 2 MB rolling cap
+    private const val MAX_BYTES: Long = 512L * 1024L
 
     @Volatile
     private var dir: File? = null
@@ -37,7 +35,7 @@ object DebugLog {
 
     fun init(context: Context) {
         if (dir != null) return
-        dir = context.getExternalFilesDir(null) ?: context.filesDir
+        dir = File(context.noBackupFilesDir, "diagnostics").also { it.mkdirs() }
     }
 
     fun log(tag: String, line: String) {

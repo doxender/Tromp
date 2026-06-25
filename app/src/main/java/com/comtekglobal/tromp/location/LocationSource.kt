@@ -21,8 +21,8 @@ import kotlin.coroutines.resume
 
 /**
  * Wraps FusedLocationProviderClient as a cold Flow. Callers must hold
- * ACCESS_FINE_LOCATION (and ACCESS_BACKGROUND_LOCATION if collecting while
- * backgrounded) before collecting.
+ * ACCESS_FINE_LOCATION before collecting. Continuous screen-off collection is
+ * owned by Tromp's user-started location foreground service.
  */
 class LocationSource(context: Context) {
 
@@ -40,6 +40,7 @@ class LocationSource(context: Context) {
             }
         }
         client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+            .addOnFailureListener { close(it) }
         awaitClose { client.removeLocationUpdates(callback) }
     }
 

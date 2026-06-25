@@ -15,3 +15,17 @@ local.properties
 
 # Machine-specific Gradle daemon JVM config
 /gradle/gradle-daemon-jvm.properties
+
+# Device diagnostics and recovered location data
+TempDebugFolder/
+*.db
+*.db-shm
+*.db-wal
+*.log
+recovered_*.csv
+recovered_*.gpx
+
+# Release signing material is local/CI-secret only
+*.jks
+*.keystore
+*.keystore.*

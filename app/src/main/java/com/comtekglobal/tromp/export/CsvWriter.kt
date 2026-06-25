@@ -89,7 +89,7 @@ object CsvWriter {
         out.write(
             "# variant,${if (includeStates == null) "pretrim" else "posttrim"}\n"
         )
-        out.write("# classifier,TrackPostProcessor v1.15.1\n")
+        out.write("# classifier,TrackPostProcessor v1.16.1\n")
         out.write("# id,${activity.id}\n")
         out.write("# name,${escape(activity.name ?: "")}\n")
         out.write("# type,${escape(activity.type)}\n")
